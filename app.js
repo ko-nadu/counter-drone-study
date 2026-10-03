@@ -187,7 +187,7 @@
         ? `<p class="muted small">관리자 메뉴 보이기 / 감추기</p>${[["history", "이력"], ["archive", "보관함"], ["quiz", "문제은행 · 문제 풀이"]].map(([k, l]) => `<label class="chk"><input type="checkbox" data-menu="${k}"${m[k] ? " checked" : ""}> ${l}</label>`).join("")}<button type="button" class="ghost" id="aoff">관리자 모드 끄기</button>
           <h2 style="margin-top:16px">학습 세션 제출함</h2><p class="muted small" id="tokst">확인 중…</p>
           <form id="tf"><input id="tok" type="password" autocomplete="off" placeholder="깃허브 토큰 붙여넣기" aria-label="제출함 토큰"><button>열쇠 저장</button></form>
-          <button type="button" class="ghost" id="tokdel">열쇠 지우기</button>`
+          <button type="button" class="ghost" id="tokchk">연결 시험</button> <button type="button" class="ghost" id="tokdel">열쇠 지우기</button><div class="muted small" id="tokres"></div>`
         : `<form id="af"><input id="apw" type="password" autocomplete="off" placeholder="관리자 비밀번호" aria-label="관리자 비밀번호"><div class="err" id="aer"></div><button>열기</button></form>`}</div>
       <div class="card set"><button type="button" class="ghost" id="lo">이 기기에서 잠그기</button></div></div>` + nav("settings");
     document.querySelectorAll("[data-set-th]").forEach(b => b.onclick = () => { setTh(b.dataset.setTh); settings(); });
@@ -195,6 +195,15 @@
     const off = $("#aoff"); if (off) off.onclick = () => { ls.del(AKEY); location.reload(); };
     if ($("#tokst")) getTok().then(t => { $("#tokst").textContent = t ? "열쇠 있음 — 문제를 풀고 '학습 세션에 보내기'를 누르면 비공개 제출함으로 암호화해 올립니다" : "열쇠 없음 — 깃허브 토큰(제출함 저장소 하나 · 내용 쓰기만)을 붙여넣어 주세요"; });
     const tf = $("#tf"); if (tf) tf.onsubmit = async ev => { ev.preventDefault(); const v = $("#tok").value.trim(); if (!v) return; await setTok(v); $("#tok").value = ""; toast("열쇠를 이 기기에 암호화해 저장했습니다"); settings(); };
+    const tc = $("#tokchk"); if (tc) tc.onclick = async () => {
+      const t = await getTok(), out = $("#tokres"); if (!t) { out.textContent = "열쇠가 없습니다"; return; }
+      out.textContent = "확인 중…";
+      try {
+        const r = await fetch(`https://api.github.com/repos/${A.sync.repo}`, {headers: {Authorization: "Bearer " + t, Accept: "application/vnd.github+json"}});
+        if (!r.ok) { out.textContent = `연결 실패 HTTP ${r.status} — 열쇠가 이 저장소(${A.sync.repo})에 권한이 없거나 만료됨`; return; }
+        const j = await r.json(); out.textContent = `연결 성공 — ${j.full_name} · ${j.private ? "비공개" : "공개(!)"} 저장소에 닿습니다`;
+      } catch (e) { out.textContent = "연결 실패 — " + e.message; }
+    };
     const td = $("#tokdel"); if (td) td.onclick = async () => { await setTok(""); toast("열쇠를 지웠습니다"); settings(); };
     $("#lo").onclick = () => { store.del(); ls.del(AKEY); ls.del(TOK); location.hash = "#/"; location.reload(); };
     const af = $("#af");
@@ -260,11 +269,12 @@
       const all = QZ.qs.length && QZ.qs.every((_, n) => QZ.res[n]);
       if (!QZ.qs.length) body = `<div class="card muted">오늘의 문제가 아직 없습니다. 자유 연습을 골라 주세요.</div>`;
       else if (all) body += `<button type="button" class="big-btn" id="qsend">학습 세션에 보내기</button><button type="button" class="ghost" id="qnew">${QZ.kind === "today" ? "오늘의 문제 다시" : "다시 3문제"}</button>`;
-      else if (!QZ.sub) body += `<button type="button" class="big-btn" id="qsub">제출</button>`;
+      else if (!QZ.sub) body += `<button type="button" class="big-btn" id="qsub">답 확인하기 (아직 안 보냄)</button>`;
     } else body = `<button type="button" class="big-btn" id="qnew">${kind === "today" ? "오늘의 문제 시작" : "3문제 시작"}</button>`;
     const dm = devMastery(), P = pending(), wait = new Set(P.filter(r => r.sent).map(r => r.sent)).size, unsent = P.filter(r => !r.sent).length;
     app.innerHTML = bar("문제 풀이", "#/") + `<div class="wrap">
-      <div class="muted small" style="margin:2px 2px 8px">지식 수준 ${pct(dm.know)}% · 진도 ${dm.asked}/${dm.all} · 보내지 않은 답 ${unsent}개 · 채점 기다리는 제출 ${wait}건</div>
+      <div class="muted small" style="margin:2px 2px 8px">지식 수준 ${pct(dm.know)}% · 진도 ${dm.asked}/${dm.all}</div>
+      <div class="card sendbox"><div><b>학습 세션에 보내지 않은 답 ${unsent}개</b> · 채점 기다리는 제출 ${wait}건</div>${lastSend()}${unsent ? `<button type="button" class="big-btn" id="qsend2">지금 학습 세션에 보내기</button>` : ""}</div>
       <div class="seg">${[["today", "오늘의 문제"], ["free", "자유 연습"]].map(([k, l]) => `<button type="button" class="segb${kind === k ? " on" : ""}" data-qkind="${k}">${l}</button>`).join("")}</div>
       ${kind === "free" ? `<div class="seg wrapseg">${chips}</div>` : `<div class="muted small" style="margin:6px 2px">학습 세션이 대화 기록을 보고 고른 문제입니다(약한 개념 → 아직 확인 안 한 개념)</div>`}
       <div class="seg">${modes}</div>${body}</div>` + nav("quiz");
@@ -292,6 +302,7 @@
       const s = SC(e); QZ.res[n] = {s}; record(QZ.qs[n].it, "sa", {text: QZ.text[n] || "", f: e.f, g: e.g || 0, a: e.a || 0, x: e.x || 0, dk: 0, s}); quiz();
     });
     const sd = $("#qsend"); if (sd) sd.onclick = () => sendPhone();
+    const sd2 = $("#qsend2"); if (sd2) sd2.onclick = () => sendPhone();
   }
 
   // ---- 폰 → 학습 세션: 보내지 않은 답을 관리자 키로 암호화해 비공개 제출함에 올린다(토큰은 이 기기에만 · 관리자 키로 암호화)
@@ -311,6 +322,13 @@
   async function setTok(t) { if (!t) { ls.del(TOK); return; } ls.set(TOK, JSON.stringify(await sealA({t}))); }
   const b64u = s => btoa(unescape(encodeURIComponent(s)));
   function stamp() { const d = new Date(), p = x => String(x).padStart(2, "0"); return `${d.getFullYear()}${p(d.getMonth() + 1)}${p(d.getDate())}-${p(d.getHours())}${p(d.getMinutes())}${p(d.getSeconds())}-${Math.random().toString(36).slice(2, 6)}`; }
+  const LSEND = "cd_last_send";
+  function lastSend() {
+    let o = null; try { o = JSON.parse(ls.get(LSEND, "null")); } catch (e) {}
+    if (!o) return `<div class="muted small">아직 보낸 적 없음</div>`;
+    const t = new Date(o.t).toLocaleString("ko-KR", {month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit"});
+    return o.ok ? `<div class="muted small">마지막 보내기 ${t} · ${o.n}문항 · <b>깃허브 확인 번호 ${escH(o.sha)}</b></div>` : `<div class="err">마지막 보내기 실패 ${t} · ${escH(o.err)}</div>`;
+  }
   async function sendPhone() {
     const L = qlog(), un = L.filter(r => !r.sent);
     if (!un.length) { toast("보낼 답이 없습니다"); return; }
@@ -323,10 +341,13 @@
       const r = await fetch(`https://api.github.com/repos/${A.sync.repo}/contents/${A.sync.dir}/${name}.json`, {method: "PUT",
         headers: {Authorization: "Bearer " + tok, Accept: "application/vnd.github+json"},
         body: JSON.stringify({message: "폰 제출 " + name, content: b64u(body)})});
-      if (!r.ok) throw new Error("HTTP " + r.status);
+      if (!r.ok) { let m = ""; try { m = (await r.json()).message || ""; } catch (e2) {} throw new Error("HTTP " + r.status + (m ? " " + m : "")); }
+      let sha = ""; try { const j = await r.json(); sha = ((j.commit && j.commit.sha) || "").slice(0, 7); } catch (e2) {}
+      if (!sha) throw new Error("깃허브 응답에 확인 번호가 없음");
       for (const x of L) if (!x.sent) x.sent = name;
-      saveLog(L); toast(`보냈습니다 · ${un.length}문항 — 학습 세션이 채점하면 반영됩니다`); quiz();
-    } catch (e) { toast("보내지 못했습니다(" + e.message + ") — 연결·열쇠를 확인해 주세요"); }
+      saveLog(L); ls.set(LSEND, JSON.stringify({ok: 1, t: Date.now(), n: un.length, sha, name}));
+      toast(`보냈습니다 · ${un.length}문항 · 확인 번호 ${sha}`); quiz();
+    } catch (e) { ls.set(LSEND, JSON.stringify({ok: 0, t: Date.now(), err: e.message})); toast("보내지 못했습니다(" + e.message + ")"); quiz(); }
   }
 
   // ------------------------------------------------------------ 홈

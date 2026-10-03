@@ -269,4 +269,5 @@ details.topic>.sum .more{color:var(--muted);font-size:14px}
 .evr{display:flex;align-items:center;justify-content:space-between;gap:8px;margin:6px 0;flex-wrap:wrap}
 .evr>span{font-size:14px;font-weight:600}
 .evr .seg{margin:0}
-
+.sendbox{display:grid;gap:6px}
+.sendbox .big-btn{margin:4px 0 0}
