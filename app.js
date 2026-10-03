@@ -238,8 +238,10 @@
   const todaySet = () => { const M = ITEMS(); return (A.today || []).filter(x => M[x.q]).map(x => ({it: M[x.q], why: x.why})); };
   const newSet = (kind, sel, mode) => ({kind, sel, mode, qs: kind === "today" ? todaySet() : pick3(sel), res: [], pick: [], text: [], ev: [], sub: false});
   function record(it, mode, o) {
-    const L = qlog(); L.push(Object.assign({v: 2, q: it.id, m: mode, t: Date.now(), sent: ""}, o)); saveLog(L);
+    const uid = Date.now() + "-" + Math.random().toString(36).slice(2, 6);
+    const L = qlog(); L.push(Object.assign({v: 2, uid, q: it.id, m: mode, t: Date.now(), sent: ""}, o)); saveLog(L); return uid;
   }
+  function patchRec(uid, o) { const L = qlog(); const r = L.find(x => x.uid === uid); if (r) Object.assign(r, o); saveLog(L); }
   const SC = e => e.dk ? -1 : (e.f || 0) + (e.g || 0) + (e.a || 0) + (e.x ? -1 : 0);
   function evBox(n, e) {
     const b = (k, v, l) => `<button type="button" class="segb${e[k] === v ? " on" : ""}" data-ev="${n}" data-k="${k}" data-v="${v}">${l}</button>`;
@@ -264,9 +266,9 @@
           return `<div class="card qz">${whyH}<div class="qn">${n + 1}. ${escH(it.mq)}</div>${opts}${r ? `<div class="ex"><b>${r.s === 2 ? "정답 · 2점" : r.s === -1 ? "모름 · -1점" : "오답 · 0점"}</b> · 정답은 ${it.ans}번 — ${escH(it.a)}<div class="muted small">근거: ${escH(it.src)} · ${escH(it.ttl)}</div></div>` : ""}</div>`;
         }
         const qtext = it.sq || it.q, e = QZ.ev[n] || {};
-        return `<div class="card qz">${whyH}<div class="qn">${n + 1}. ${escH(qtext)}${it.sq ? ' <span class="lvb">적용</span>' : ""}</div><textarea data-sa="${n}" rows="4" placeholder="노트를 보지 말고 기억나는 대로 써 보세요"${QZ.sub ? " disabled" : ""}>${escH(QZ.text[n] || "")}</textarea>${QZ.sub ? `<div class="ex"><b>모범 답안</b> — ${escH(it.a)}<div class="muted small">근거: ${escH(it.src)} · ${escH(it.ttl)}</div>${r ? `<div class="self done">가채점 ${r.s}점${r.dk ? " (모름)" : ""} · 학습 세션이 다시 채점합니다</div>` : evBox(n, e)}</div>` : `<button type="button" class="ghost dk" data-dk="${n}">모름(-1)</button>`}</div>`;
+        return `<div class="card qz">${whyH}<div class="qn">${n + 1}. ${escH(qtext)}${it.sq ? ' <span class="lvb">적용</span>' : ""}</div><textarea data-sa="${n}" rows="4" placeholder="노트를 보지 말고 기억나는 대로 써 보세요"${QZ.sub ? " disabled" : ""}>${escH(QZ.text[n] || "")}</textarea>${QZ.sub ? `<div class="ex"><b>모범 답안</b> — ${escH(it.a)}<div class="muted small">근거: ${escH(it.src)} · ${escH(it.ttl)}</div>${r ? `<div class="self done">가채점 ${r.s}점${r.dk ? " (모름)" : ""} · 학습 세션이 다시 채점합니다</div>` : `<div class="muted small">답은 저장됐습니다 · 자기 평가는 해도 되고 안 해도 됩니다(학습 세션이 채점)</div>` + evBox(n, e)}</div>` : `<button type="button" class="ghost dk" data-dk="${n}">모름(-1)</button>`}</div>`;
       }).join("");
-      const all = QZ.qs.length && QZ.qs.every((_, n) => QZ.res[n]);
+      const all = QZ.qs.length && (QZ.mode === "sa" ? QZ.sub : QZ.qs.every((_, n) => QZ.res[n]));
       if (!QZ.qs.length) body = `<div class="card muted">오늘의 문제가 아직 없습니다. 자유 연습을 골라 주세요.</div>`;
       else if (all) body += `<button type="button" class="big-btn" id="qsend">학습 세션에 보내기</button><button type="button" class="ghost" id="qnew">${QZ.kind === "today" ? "오늘의 문제 다시" : "다시 3문제"}</button>`;
       else if (!QZ.sub) body += `<button type="button" class="big-btn" id="qsub">답 확인하기 (아직 안 보냄)</button>`;
@@ -292,6 +294,10 @@
         if (QZ.qs.some((_, n) => !QZ.pick[n])) { toast("모든 문제를 고른 뒤 제출하세요"); return; }
         QZ.qs.forEach(({it}, n) => { const c = QZ.pick[n], s = c === 5 ? -1 : c === it.ans ? 2 : 0; QZ.res[n] = {s}; record(it, "mc", {choice: c, f: Math.max(0, s), g: 0, a: 0, x: 0, dk: c === 5 ? 1 : 0, s}); });
       }
+      if (QZ.mode === "sa") {
+        QZ.uid = QZ.uid || [];
+        QZ.qs.forEach(({it}, n) => { if (QZ.res[n]) return; QZ.uid[n] = record(it, "sa", {text: QZ.text[n] || "", f: null, g: null, a: null, x: 0, dk: 0, s: null}); });
+      }
       QZ.sub = true; quiz();
     };
     document.querySelectorAll("[data-ev]").forEach(b => b.onclick = () => { const n = +b.dataset.ev; QZ.ev[n] = Object.assign(QZ.ev[n] || {}, {[b.dataset.k]: +b.dataset.v}); quiz(); });
@@ -299,7 +305,10 @@
     document.querySelectorAll("[data-evsave]").forEach(b => b.onclick = () => {
       const n = +b.dataset.evsave, e = QZ.ev[n] || {};
       if (e.f == null) { toast("핵심 사실부터 골라 주세요"); return; }
-      const s = SC(e); QZ.res[n] = {s}; record(QZ.qs[n].it, "sa", {text: QZ.text[n] || "", f: e.f, g: e.g || 0, a: e.a || 0, x: e.x || 0, dk: 0, s}); quiz();
+      const s = SC(e); QZ.res[n] = {s};
+      const o = {text: QZ.text[n] || "", f: e.f, g: e.g || 0, a: e.a || 0, x: e.x || 0, dk: 0, s};
+      if (QZ.uid && QZ.uid[n]) patchRec(QZ.uid[n], o); else record(QZ.qs[n].it, "sa", o);
+      quiz();
     });
     const sd = $("#qsend"); if (sd) sd.onclick = () => sendPhone();
     const sd2 = $("#qsend2"); if (sd2) sd2.onclick = () => sendPhone();
