@@ -144,23 +144,38 @@
   const menus = () => { try { return Object.assign({history: true, archive: true, quiz: true}, JSON.parse(ls.get(AMENU, "{}"))); } catch (e) { return {history: true, archive: true, quiz: true}; } };
   const on3 = k => !!A && menus()[k];
 
-  // ---- 문제 풀이 기록(이 기기에만) · 숙달도 = 최근 3회 가중(3:2:1) ÷ 3 · 안 푼 개념 0%
-  const qlog = () => { try { return JSON.parse(ls.get(QLOG, "[]")); } catch (e) { return []; } };
-  const cm = s => { if (!s || !s.length) return 0; const last = s.slice(-3).reverse(), w = [3, 2, 1].slice(0, last.length); return last.reduce((a, x, i) => a + x * w[i], 0) / (3 * w.reduce((a, b) => a + b, 0)); };
+  // ---- 지식 수준(채점 v2 · 26.10.03) = 학습 세션 확정 기록(PC) + 이 기기 가채점(아직 확정 전) · 숙달도 = 최근 3회 가중(3:2:1) ÷ 4 · 30일마다 -10%p
+  // 지식 수준 = 물어본 개념만의 평균(새 회차를 열어도 떨어지지 않음) · 진도 = 물어본 개념 / 배운 개념
+  const qlog = () => { try { return JSON.parse(ls.get(QLOG, "[]")).filter(r => r && r.v === 2); } catch (e) { return []; } };
+  const saveLog = L => ls.set(QLOG, JSON.stringify(L.slice(-2000)));
+  const DAY = 864e5;
+  const cm = (rs, now) => {
+    if (!rs || !rs.length) return 0;
+    const last = rs.slice(-3).reverse(), w = [3, 2, 1].slice(0, last.length);
+    let m = last.reduce((a, x, i) => a + x.s * w[i], 0) / (4 * w.reduce((a, b) => a + b, 0));
+    m -= 0.1 * Math.floor((now - rs[rs.length - 1].t) / (30 * DAY));
+    return Math.max(0, Math.min(1, m));
+  };
+  const pending = () => { const done = new Set(A.phone_done || []); return qlog().filter(r => !(r.sent && done.has(r.sent))); };
   function devMastery() {
-    const by = {}; for (const r of qlog()) (by[r.q] = by[r.q] || []).push(r.s);
+    const now = Date.now(), by = {};
+    for (const r of (A.pc.recs || [])) (by[r.q] = by[r.q] || []).push({s: r.s, t: Date.parse(r.d + "T12:00:00")});
+    for (const r of pending()) if (r.s != null) (by[r.q] = by[r.q] || []).push({s: r.s, t: r.t, p: 1});
+    let asked = 0, all = 0;
     const topics = A.bank.map(t => {
-      const items = t.items.map(i => ({i, m: cm(by[i.id]), n: (by[i.id] || []).length}));
-      return {id: t.id, title: t.title, items, rate: items.length ? items.reduce((a, x) => a + x.m, 0) / items.length : 0, asked: items.filter(x => x.n).length};
+      const items = t.items.map(i => { const rs = (by[i.id] || []).sort((a, b) => a.t - b.t); return {i, m: cm(rs, now), n: rs.length, p: rs.some(x => x.p)}; });
+      const ak = items.filter(x => x.n); asked += ak.length; all += items.length;
+      const pc = (A.pc.topics || []).find(x => x.id === t.id) || {};
+      return {id: t.id, title: t.title, items, asked: ak.length, know: ak.length ? ak.reduce((a, x) => a + x.m, 0) / ak.length : null, lv: pc.lv, prov: items.some(x => x.p)};
     });
-    return {topics, overall: topics.length ? topics.reduce((a, t) => a + t.rate, 0) / topics.length : 0};
+    const kt = topics.filter(t => t.know != null);
+    return {topics, know: kt.length ? kt.reduce((a, t) => a + t.know, 0) / kt.length : 0, asked, all, prov: topics.some(t => t.prov)};
   }
-  const pct = x => Math.round(x * 100);
-  const pcRate = id => { const t = (A.pc.topics || []).find(x => x.id === id); return t ? t.rate : 0; };
-  function rateCard() {  // 홈 상단 — 종합 도달률(이 기기 풀이 기준) → 누르면 회차별
+  const pct = x => Math.round((x || 0) * 100);
+  function rateCard() {  // 홈 상단 — 지식 수준(큰 숫자) · 진도(작게) → 누르면 회차별
     const dm = devMastery();
-    const rows = dm.topics.map(t => `<div class="rrow"><span class="t">${escH(t.id.replace(/^(\d)-/, "$1부 "))} ${escH(t.title.split(" — ")[0])}</span><span class="v">${pct(t.rate)}%</span><div class="track"><i style="width:${pct(t.rate)}%"></i></div><span class="muted small">이 기기 ${t.asked}/${t.items.length} 개념 풀이 · 학습 세션 기록 ${pct(pcRate(t.id))}%</span></div>`).join("");
-    return `<details class="card rate"><summary><div class="rrow top"><span class="t">종합 도달률</span><span class="v big">${pct(dm.overall)}%</span><div class="track"><i style="width:${pct(dm.overall)}%"></i></div><span class="muted small">이 기기 풀이 기준 · 학습 세션 기록 ${pct(A.pc.overall)}% · 누르면 회차별</span></div></summary>${rows}<a class="go" href="#/quiz">문제 풀기 ›</a></details>`;
+    const rows = dm.topics.map(t => `<div class="rrow"><span class="t">${escH(t.id.replace(/^(\d)-/, "$1부 "))} ${escH(t.title.split(" — ")[0])}</span><span class="v">${t.know == null ? "—" : pct(t.know) + "%"}</span><div class="track"><i style="width:${pct(t.know)}%"></i></div><span class="muted small">${t.lv != null ? "수준 L" + t.lv + " · " : ""}확인 ${t.asked}/${t.items.length} 개념${t.prov ? " · 가채점 포함" : ""}</span></div>`).join("");
+    return `<details class="card rate"><summary><div class="rrow top"><span class="t">지식 수준</span><span class="v big">${pct(dm.know)}%</span><div class="track"><i style="width:${pct(dm.know)}%"></i></div><span class="muted small">진도 ${dm.asked}/${dm.all} 개념 · 학습 세션 채점${dm.prov ? " + 이 기기 가채점" : ""} · 누르면 회차별</span></div></summary>${rows}<a class="go" href="#/quiz">오늘의 문제 ›</a></details>`;
   }
 
   // ---- 설정(⚙): 화면 보기(누구나) · 관리자 모드(관리자 비밀번호)
@@ -169,13 +184,19 @@
     app.innerHTML = bar("설정", "#/") + `<div class="wrap">
       <div class="card set"><h2>화면 보기</h2><div class="seg">${TH.map(t => `<button type="button" class="segb${getTh() === t ? " on" : ""}" data-set-th="${t}">${THL[t]}</button>`).join("")}</div></div>
       <div class="card set"><h2>관리자 모드</h2>${A
-        ? `<p class="muted small">관리자 메뉴 보이기 / 감추기</p>${[["history", "이력"], ["archive", "보관함"], ["quiz", "문제은행 · 문제 풀이"]].map(([k, l]) => `<label class="chk"><input type="checkbox" data-menu="${k}"${m[k] ? " checked" : ""}> ${l}</label>`).join("")}<button type="button" class="ghost" id="aoff">관리자 모드 끄기</button>`
+        ? `<p class="muted small">관리자 메뉴 보이기 / 감추기</p>${[["history", "이력"], ["archive", "보관함"], ["quiz", "문제은행 · 문제 풀이"]].map(([k, l]) => `<label class="chk"><input type="checkbox" data-menu="${k}"${m[k] ? " checked" : ""}> ${l}</label>`).join("")}<button type="button" class="ghost" id="aoff">관리자 모드 끄기</button>
+          <h2 style="margin-top:16px">학습 세션 제출함</h2><p class="muted small" id="tokst">확인 중…</p>
+          <form id="tf"><input id="tok" type="password" autocomplete="off" placeholder="깃허브 토큰 붙여넣기" aria-label="제출함 토큰"><button>열쇠 저장</button></form>
+          <button type="button" class="ghost" id="tokdel">열쇠 지우기</button>`
         : `<form id="af"><input id="apw" type="password" autocomplete="off" placeholder="관리자 비밀번호" aria-label="관리자 비밀번호"><div class="err" id="aer"></div><button>열기</button></form>`}</div>
       <div class="card set"><button type="button" class="ghost" id="lo">이 기기에서 잠그기</button></div></div>` + nav("settings");
     document.querySelectorAll("[data-set-th]").forEach(b => b.onclick = () => { setTh(b.dataset.setTh); settings(); });
     document.querySelectorAll("[data-menu]").forEach(c => c.onchange = () => { const mm = menus(); mm[c.dataset.menu] = c.checked; ls.set(AMENU, JSON.stringify(mm)); settings(); });
     const off = $("#aoff"); if (off) off.onclick = () => { ls.del(AKEY); location.reload(); };
-    $("#lo").onclick = () => { store.del(); ls.del(AKEY); location.hash = "#/"; location.reload(); };
+    if ($("#tokst")) getTok().then(t => { $("#tokst").textContent = t ? "열쇠 있음 — 문제를 풀고 '학습 세션에 보내기'를 누르면 비공개 제출함으로 암호화해 올립니다" : "열쇠 없음 — 깃허브 토큰(제출함 저장소 하나 · 내용 쓰기만)을 붙여넣어 주세요"; });
+    const tf = $("#tf"); if (tf) tf.onsubmit = async ev => { ev.preventDefault(); const v = $("#tok").value.trim(); if (!v) return; await setTok(v); $("#tok").value = ""; toast("열쇠를 이 기기에 암호화해 저장했습니다"); settings(); };
+    const td = $("#tokdel"); if (td) td.onclick = async () => { await setTok(""); toast("열쇠를 지웠습니다"); settings(); };
+    $("#lo").onclick = () => { store.del(); ls.del(AKEY); ls.del(TOK); location.hash = "#/"; location.reload(); };
     const af = $("#af");
     if (af) af.onsubmit = async ev => {
       ev.preventDefault(); $("#aer").textContent = "여는 중…";
@@ -190,55 +211,122 @@
     window.scrollTo(0, 0);
   }
 
-  // ---- 문제 풀이: 회차 선택 또는 전체 → 무작위 3문제(약한·안 푼 개념 우선) → 제출 → 채점·해설 → 이 기기에 기록
+  // ---- 문제 풀이(채점 v2): ① 오늘의 문제(학습 세션이 고름 · '왜' 한 줄) ② 자유 연습(회차 선택 · 약한 개념 우선 3문제)
+  // 서술형 = 상황형이 있으면 상황형 · 자기 평가는 학습 세션과 같은 축(사실 0-2 · 근거 0-1 · 이유 0-1 · 단정 오답 -1 · 모름 -1) → 가채점
+  // 객관식 = 사실 축만(정답 2 · 오답 0 · 모름 -1) · 다 풀면 '학습 세션에 보내기'(비공개 제출함 · 관리자 키로 암호화)
   let QZ = null;
+  const ITEMS = () => { const m = {}; for (const t of A.bank) for (const i of t.items) m[i.id] = Object.assign({}, i, {ttl: t.title}); return m; };
   function pick3(sel) {
     const pool = []; for (const t of devMastery().topics) if (sel === "all" || sel === t.id) pool.push(...t.items);
-    const w = x => (1 - x.m) * 2 + (x.n ? 0 : 1) + 0.2, out = [];
+    const w = x => (1 - x.m) * 2 + (x.n ? 0 : 0.5) + 0.2, out = [];
     while (out.length < 3 && pool.length) {
       let r = Math.random() * pool.reduce((a, x) => a + w(x), 0), k = 0;
       for (; k < pool.length - 1; k++) { r -= w(pool[k]); if (r <= 0) break; }
-      out.push(pool.splice(k, 1)[0].i);
+      out.push({it: pool.splice(k, 1)[0].i, why: ""});
     }
     return out;
   }
-  function saveScore(q, s, mode) { const L = qlog(); L.push({q, s, m: mode, t: Date.now()}); ls.set(QLOG, JSON.stringify(L.slice(-2000))); }
+  const todaySet = () => { const M = ITEMS(); return (A.today || []).filter(x => M[x.q]).map(x => ({it: M[x.q], why: x.why})); };
+  const newSet = (kind, sel, mode) => ({kind, sel, mode, qs: kind === "today" ? todaySet() : pick3(sel), res: [], pick: [], text: [], ev: [], sub: false});
+  function record(it, mode, o) {
+    const L = qlog(); L.push(Object.assign({v: 2, q: it.id, m: mode, t: Date.now(), sent: ""}, o)); saveLog(L);
+  }
+  const SC = e => e.dk ? -1 : (e.f || 0) + (e.g || 0) + (e.a || 0) + (e.x ? -1 : 0);
+  function evBox(n, e) {
+    const b = (k, v, l) => `<button type="button" class="segb${e[k] === v ? " on" : ""}" data-ev="${n}" data-k="${k}" data-v="${v}">${l}</button>`;
+    return `<div class="evx"><div class="muted small">스스로 평가(학습 세션과 같은 기준 · 가채점)</div>
+      <div class="evr"><span>핵심 사실</span><div class="seg">${b("f", 0, "없음")}${b("f", 1, "일부")}${b("f", 2, "정확")}</div></div>
+      <div class="evr"><span>근거(법·문서·숫자)</span><div class="seg">${b("g", 0, "못 댐")}${b("g", 1, "댐")}</div></div>
+      <div class="evr"><span>이유·적용</span><div class="seg">${b("a", 0, "못 댐")}${b("a", 1, "댐")}</div></div>
+      <label class="chk"><input type="checkbox" data-evx="${n}"${e.x ? " checked" : ""}> 틀린 사실을 확신하며 썼다(-1)</label>
+      <button type="button" class="ghost" data-evsave="${n}">평가 저장 · ${SC(e)}점</button></div>`;
+  }
   function quiz() {
     if (!on3("quiz")) { location.hash = "#/"; return; }
-    const sel = (QZ && QZ.sel) || "all", mode = (QZ && QZ.mode) || "mc";
+    const sel = (QZ && QZ.sel) || "all", mode = (QZ && QZ.mode) || "sa", kind = (QZ && QZ.kind) || "today";
     const chips = [["all", "전체"], ...A.bank.map(t => [t.id, t.id.replace(/^(\d)-/, "$1부 ")])].map(([k, l]) => `<button type="button" class="segb${sel === k ? " on" : ""}" data-qsel="${k}">${escH(l)}</button>`).join("");
-    const modes = [["mc", "객관식"], ["sa", "주관식"]].map(([k, l]) => `<button type="button" class="segb${mode === k ? " on" : ""}" data-qmode="${k}">${l}</button>`).join("");
+    const modes = [["sa", "서술"], ["mc", "객관식"]].map(([k, l]) => `<button type="button" class="segb${mode === k ? " on" : ""}" data-qmode="${k}">${l}</button>`).join("");
     let body = "";
     if (QZ && QZ.qs) {
-      body = QZ.qs.map((it, n) => {
-        const r = QZ.res[n];
+      body = QZ.qs.map(({it, why}, n) => {
+        const r = QZ.res[n], whyH = why ? `<div class="why">왜 이 문제: ${escH(why)}</div>` : "";
         if (QZ.mode === "mc") {
-          const opts = it.opts.map((o, j) => `<label class="opt${r ? (j + 1 === it.ans ? " ok" : (QZ.pick[n] === j + 1 ? " bad" : "")) : ""}"><input type="radio" name="q${n}" value="${j + 1}"${QZ.pick[n] === j + 1 ? " checked" : ""}${r ? " disabled" : ""}> ${escH(o)}</label>`).join("");
-          return `<div class="card qz"><div class="qn">${n + 1}. ${escH(it.mq)}</div>${opts}${r ? `<div class="ex"><b>${r.s === 3 ? "정답" : "오답"}</b> · 정답은 ${it.ans}번 — ${escH(it.a)}<div class="muted small">근거: ${escH(it.src)} · ${escH(it.topic)}</div></div>` : ""}</div>`;
+          const opts = [...it.opts, "모름"].map((o, j) => `<label class="opt${r ? (j + 1 === it.ans ? " ok" : (QZ.pick[n] === j + 1 ? " bad" : "")) : ""}"><input type="radio" name="q${n}" value="${j + 1}"${QZ.pick[n] === j + 1 ? " checked" : ""}${r ? " disabled" : ""}> ${escH(o)}</label>`).join("");
+          return `<div class="card qz">${whyH}<div class="qn">${n + 1}. ${escH(it.mq)}</div>${opts}${r ? `<div class="ex"><b>${r.s === 2 ? "정답 · 2점" : r.s === -1 ? "모름 · -1점" : "오답 · 0점"}</b> · 정답은 ${it.ans}번 — ${escH(it.a)}<div class="muted small">근거: ${escH(it.src)} · ${escH(it.ttl)}</div></div>` : ""}</div>`;
         }
-        return `<div class="card qz"><div class="qn">${n + 1}. ${escH(it.q)}</div><textarea data-sa="${n}" rows="3" placeholder="기억나는 대로 써 보세요"${QZ.sub ? " disabled" : ""}>${escH(QZ.text[n] || "")}</textarea>${QZ.sub ? `<div class="ex"><b>모범 답안</b> — ${escH(it.a)}<div class="muted small">근거: ${escH(it.src)} · ${escH(it.topic)}</div>${r ? `<div class="self done">스스로 평가: ${["모름", "일부", "맞음"][r.s]}</div>` : `<div class="self">스스로 평가 <button type="button" data-self="${n}" data-s="2">맞음</button><button type="button" data-self="${n}" data-s="1">일부</button><button type="button" data-self="${n}" data-s="0">모름</button></div>`}</div>` : ""}</div>`;
+        const qtext = it.sq || it.q, e = QZ.ev[n] || {};
+        return `<div class="card qz">${whyH}<div class="qn">${n + 1}. ${escH(qtext)}${it.sq ? ' <span class="lvb">적용</span>' : ""}</div><textarea data-sa="${n}" rows="4" placeholder="노트를 보지 말고 기억나는 대로 써 보세요"${QZ.sub ? " disabled" : ""}>${escH(QZ.text[n] || "")}</textarea>${QZ.sub ? `<div class="ex"><b>모범 답안</b> — ${escH(it.a)}<div class="muted small">근거: ${escH(it.src)} · ${escH(it.ttl)}</div>${r ? `<div class="self done">가채점 ${r.s}점${r.dk ? " (모름)" : ""} · 학습 세션이 다시 채점합니다</div>` : evBox(n, e)}</div>` : `<button type="button" class="ghost dk" data-dk="${n}">모름(-1)</button>`}</div>`;
       }).join("");
-      const all = QZ.qs.every((_, n) => QZ.res[n]);
-      body += QZ.sub || QZ.mode === "mc" && all ? (all ? `<button type="button" class="big-btn" id="qnew">다시 3문제</button>` : "") : `<button type="button" class="big-btn" id="qsub">제출</button>`;
-    } else body = `<button type="button" class="big-btn" id="qnew">3문제 시작</button>`;
-    const dm = devMastery();
+      const all = QZ.qs.length && QZ.qs.every((_, n) => QZ.res[n]);
+      if (!QZ.qs.length) body = `<div class="card muted">오늘의 문제가 아직 없습니다. 자유 연습을 골라 주세요.</div>`;
+      else if (all) body += `<button type="button" class="big-btn" id="qsend">학습 세션에 보내기</button><button type="button" class="ghost" id="qnew">${QZ.kind === "today" ? "오늘의 문제 다시" : "다시 3문제"}</button>`;
+      else if (!QZ.sub) body += `<button type="button" class="big-btn" id="qsub">제출</button>`;
+    } else body = `<button type="button" class="big-btn" id="qnew">${kind === "today" ? "오늘의 문제 시작" : "3문제 시작"}</button>`;
+    const dm = devMastery(), P = pending(), wait = new Set(P.filter(r => r.sent).map(r => r.sent)).size, unsent = P.filter(r => !r.sent).length;
     app.innerHTML = bar("문제 풀이", "#/") + `<div class="wrap">
-      <div class="muted small" style="margin:2px 2px 8px">이 기기 종합 ${pct(dm.overall)}% · 문항 ${A.bank.reduce((a, t) => a + t.items.length, 0)}개 · 기록은 이 기기에만 남습니다</div>
-      <div class="seg wrapseg">${chips}</div><div class="seg">${modes}</div>${body}</div>` + nav("quiz");
-    document.querySelectorAll("[data-qsel]").forEach(b => b.onclick = () => { QZ = {sel: b.dataset.qsel, mode}; quiz(); });
-    document.querySelectorAll("[data-qmode]").forEach(b => b.onclick = () => { QZ = {sel, mode: b.dataset.qmode}; quiz(); });
-    const nw = $("#qnew"); if (nw) nw.onclick = () => { QZ = {sel, mode, qs: pick3(sel), res: [], pick: [], text: [], sub: false}; quiz(); window.scrollTo(0, 0); };
+      <div class="muted small" style="margin:2px 2px 8px">지식 수준 ${pct(dm.know)}% · 진도 ${dm.asked}/${dm.all} · 보내지 않은 답 ${unsent}개 · 채점 기다리는 제출 ${wait}건</div>
+      <div class="seg">${[["today", "오늘의 문제"], ["free", "자유 연습"]].map(([k, l]) => `<button type="button" class="segb${kind === k ? " on" : ""}" data-qkind="${k}">${l}</button>`).join("")}</div>
+      ${kind === "free" ? `<div class="seg wrapseg">${chips}</div>` : `<div class="muted small" style="margin:6px 2px">학습 세션이 대화 기록을 보고 고른 문제입니다(약한 개념 → 아직 확인 안 한 개념)</div>`}
+      <div class="seg">${modes}</div>${body}</div>` + nav("quiz");
+    const reset = o => { QZ = Object.assign({sel, mode, kind}, o); quiz(); };
+    document.querySelectorAll("[data-qkind]").forEach(b => b.onclick = () => reset({kind: b.dataset.qkind}));
+    document.querySelectorAll("[data-qsel]").forEach(b => b.onclick = () => reset({sel: b.dataset.qsel}));
+    document.querySelectorAll("[data-qmode]").forEach(b => b.onclick = () => reset({mode: b.dataset.qmode}));
+    const nw = $("#qnew"); if (nw) nw.onclick = () => { QZ = newSet(kind, sel, mode); quiz(); window.scrollTo(0, 0); };
     document.querySelectorAll("textarea[data-sa]").forEach(t => t.oninput = () => { QZ.text[+t.dataset.sa] = t.value; });
     document.querySelectorAll(".qz input[type=radio]").forEach(r => r.onchange = () => { QZ.pick[+r.name.slice(1)] = +r.value; });
+    document.querySelectorAll("[data-dk]").forEach(b => b.onclick = () => { const n = +b.dataset.dk; QZ.text[n] = "(모름)"; QZ.ev[n] = {dk: 1}; const it = QZ.qs[n].it; QZ.res[n] = {s: -1, dk: 1}; record(it, "sa", {text: "(모름)", f: 0, g: 0, a: 0, x: 0, dk: 1, s: -1}); quiz(); });
     const sb = $("#qsub");
     if (sb) sb.onclick = () => {
       if (QZ.mode === "mc") {
-        if (QZ.qs.some((_, n) => !QZ.pick[n])) { toast("세 문제 모두 고른 뒤 제출하세요"); return; }
-        QZ.qs.forEach((it, n) => { const s = QZ.pick[n] === it.ans ? 3 : 0; QZ.res[n] = {s}; saveScore(it.id, s, "mc"); });
+        if (QZ.qs.some((_, n) => !QZ.pick[n])) { toast("모든 문제를 고른 뒤 제출하세요"); return; }
+        QZ.qs.forEach(({it}, n) => { const c = QZ.pick[n], s = c === 5 ? -1 : c === it.ans ? 2 : 0; QZ.res[n] = {s}; record(it, "mc", {choice: c, f: Math.max(0, s), g: 0, a: 0, x: 0, dk: c === 5 ? 1 : 0, s}); });
       }
       QZ.sub = true; quiz();
     };
-    document.querySelectorAll("[data-self]").forEach(b => b.onclick = () => { const n = +b.dataset.self, s = +b.dataset.s; QZ.res[n] = {s}; saveScore(QZ.qs[n].id, s, "sa"); quiz(); });
+    document.querySelectorAll("[data-ev]").forEach(b => b.onclick = () => { const n = +b.dataset.ev; QZ.ev[n] = Object.assign(QZ.ev[n] || {}, {[b.dataset.k]: +b.dataset.v}); quiz(); });
+    document.querySelectorAll("[data-evx]").forEach(c => c.onchange = () => { const n = +c.dataset.evx; QZ.ev[n] = Object.assign(QZ.ev[n] || {}, {x: c.checked ? 1 : 0}); quiz(); });
+    document.querySelectorAll("[data-evsave]").forEach(b => b.onclick = () => {
+      const n = +b.dataset.evsave, e = QZ.ev[n] || {};
+      if (e.f == null) { toast("핵심 사실부터 골라 주세요"); return; }
+      const s = SC(e); QZ.res[n] = {s}; record(QZ.qs[n].it, "sa", {text: QZ.text[n] || "", f: e.f, g: e.g || 0, a: e.a || 0, x: e.x || 0, dk: 0, s}); quiz();
+    });
+    const sd = $("#qsend"); if (sd) sd.onclick = () => sendPhone();
+  }
+
+  // ---- 폰 → 학습 세션: 보내지 않은 답을 관리자 키로 암호화해 비공개 제출함에 올린다(토큰은 이 기기에만 · 관리자 키로 암호화)
+  const TOK = "cd_sync_tok";
+  const akeyRaw = () => { const v = ls.get(AKEY, ""); return v ? b64(v.split(".")[1]) : null; };
+  async function sealA(obj) {
+    const k = await crypto.subtle.importKey("raw", akeyRaw(), "AES-GCM", false, ["encrypt"]);
+    const iv = crypto.getRandomValues(new Uint8Array(12));
+    const ct = await crypto.subtle.encrypt({name: "AES-GCM", iv}, k, new TextEncoder().encode(JSON.stringify(obj)));
+    return {v: 1, iv: ub64(iv), ct: ub64(ct)};
+  }
+  async function openA(o) {
+    const k = await crypto.subtle.importKey("raw", akeyRaw(), "AES-GCM", false, ["decrypt"]);
+    return new TextDecoder().decode(await crypto.subtle.decrypt({name: "AES-GCM", iv: b64(o.iv)}, k, b64(o.ct)));
+  }
+  async function getTok() { try { return JSON.parse(await openA(JSON.parse(ls.get(TOK, "")))).t || ""; } catch (e) { return ""; } }
+  async function setTok(t) { if (!t) { ls.del(TOK); return; } ls.set(TOK, JSON.stringify(await sealA({t}))); }
+  const b64u = s => btoa(unescape(encodeURIComponent(s)));
+  function stamp() { const d = new Date(), p = x => String(x).padStart(2, "0"); return `${d.getFullYear()}${p(d.getMonth() + 1)}${p(d.getDate())}-${p(d.getHours())}${p(d.getMinutes())}${p(d.getSeconds())}-${Math.random().toString(36).slice(2, 6)}`; }
+  async function sendPhone() {
+    const L = qlog(), un = L.filter(r => !r.sent);
+    if (!un.length) { toast("보낼 답이 없습니다"); return; }
+    const name = stamp(), M = ITEMS();
+    const payload = {v: 2, name, at: new Date().toISOString(), items: un.map(r => ({q: r.q, m: r.m, t: new Date(r.t).toISOString(), text: r.text || "", choice: r.choice || 0, f: r.f, g: r.g, a: r.a, x: r.x, dk: r.dk, s: r.s, ask: M[r.q] ? (r.m === "mc" ? M[r.q].mq : (M[r.q].sq || M[r.q].q)) : ""}))};
+    const tok = await getTok();
+    if (!tok) { toast("⚙ 설정 › 관리자 모드에서 제출함 열쇠를 먼저 넣어 주세요"); return; }
+    try {
+      const body = JSON.stringify(await sealA(payload));
+      const r = await fetch(`https://api.github.com/repos/${A.sync.repo}/contents/${A.sync.dir}/${name}.json`, {method: "PUT",
+        headers: {Authorization: "Bearer " + tok, Accept: "application/vnd.github+json"},
+        body: JSON.stringify({message: "폰 제출 " + name, content: b64u(body)})});
+      if (!r.ok) throw new Error("HTTP " + r.status);
+      for (const x of L) if (!x.sent) x.sent = name;
+      saveLog(L); toast(`보냈습니다 · ${un.length}문항 — 학습 세션이 채점하면 반영됩니다`); quiz();
+    } catch (e) { toast("보내지 못했습니다(" + e.message + ") — 연결·열쇠를 확인해 주세요"); }
   }
 
   // ------------------------------------------------------------ 홈

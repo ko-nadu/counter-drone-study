@@ -261,3 +261,12 @@ details.topic>.sum .more{color:var(--muted);font-size:14px}
 .self{margin-top:8px;display:flex;gap:8px;align-items:center;flex-wrap:wrap;font-weight:700}
 .self button{min-height:40px;padding:0 14px;border-radius:10px;border:1px solid var(--line);background:var(--card);color:var(--text);font:inherit;font-weight:700}
 .big-btn{width:100%;min-height:50px;border-radius:14px;border:0;background:var(--accent);color:#fff;font:inherit;font-size:17px;font-weight:800;margin:6px 0 14px}
+/* 문제 풀이 v2 (26.10.03) */
+.qz .why{font-size:13px;color:var(--muted);background:var(--hot);border-radius:8px;padding:6px 10px;margin:0 0 8px}
+.qz .lvb{font-size:11px;font-weight:700;padding:1px 7px;border-radius:99px;background:var(--hot);border:1px solid var(--hot-line);vertical-align:2px}
+.qz .dk{margin-top:6px}
+.evx{margin-top:10px;border-top:1px solid var(--line);padding-top:8px}
+.evr{display:flex;align-items:center;justify-content:space-between;gap:8px;margin:6px 0;flex-wrap:wrap}
+.evr>span{font-size:14px;font-weight:600}
+.evr .seg{margin:0}
+
