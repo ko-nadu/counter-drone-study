@@ -302,7 +302,7 @@
     } else window.scrollTo(0, 0);
   }
   function archive() {
-    const recs = D.topics.filter(t => t.has_rec).map(t => `<a class="item" href="#/p/rec-${t.id}"><span class="rk rk-${t.lvl}">${t.code}</span><span>${escH(D.pages["rec-" + t.id].title)}<small>문답 · 대표님 설명과 첨삭 · 교재 재료 · 논문 포인트</small></span></a>`).join("");
+    const recs = D.topics.filter(t => t.has_rec).map(t => `<a class="item" href="#/p/rec-${t.id}"><span class="rk rk-${t.lvl}">${t.code}</span><span>${escH(D.pages["rec-" + t.id].title)}<small>문답 · 설명과 첨삭 · 교재 재료 · 논문 포인트</small></span></a>`).join("");
     app.innerHTML = bar("보관함", "#/") + `<div class="wrap">
       <p class="muted small" style="margin:4px 2px 12px">공부한 과정과 연구·교재용 자료입니다. 복습은 홈의 핵심 노트로 하세요.</p>
       <div class="card" style="padding:0">${recs || '<div class="empty">아직 없습니다.</div>'}</div>
