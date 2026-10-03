@@ -119,7 +119,7 @@
   };
   const bar = (title, back) => `<header class="top"><div class="in">${back ? `<a class="back" href="${back}" aria-label="뒤로">‹</a><div class="t">${escH(title)}</div>` : `<div class="brand">대드론 학습 노트</div>`}</div></header>`;
 
-  // ------------------------------------------------------------ 관리자 모드 (대표님 26.10.03)
+  // ------------------------------------------------------------ 관리자 모드 (26.10.03)
   // 관리자 묶음(data.admin.enc.json)은 관리자 비밀번호로 따로 잠겨 있다 — 직원 비밀번호로는 풀 수 없다.
   const AKEY = "cd_admin_key", AMENU = "cd_admin_menu", QLOG = "cd_quiz_log";
   let A = null, ACT = "";
