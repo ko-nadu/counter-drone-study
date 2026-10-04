@@ -224,6 +224,8 @@
   // 서술형 = 상황형이 있으면 상황형 · 자기 평가는 학습 세션과 같은 축(사실 0-2 · 근거 0-1 · 이유 0-1 · 단정 오답 -1 · 모름 -1) → 가채점
   // 객관식 = 사실 축만(정답 2 · 오답 0 · 모름 -1) · 다 풀면 '학습 세션에 보내기'(비공개 제출함 · 관리자 키로 암호화)
   let QZ = null;
+  // 문항의 시각(대표님 26.10.04 "다양한 시각에서의 접근") — 배지 이름
+  const VLAB = {"개념": "개념", "상황": "상황", "역할": "역할 바꾸기", "반론": "반론", "오류": "틀린 곳 찾기", "우선순위": "우선순위", "비교": "비교", "연결": "연결", "연구": "연구 질문"};
   const ITEMS = () => { const m = {}; for (const t of A.bank) for (const i of t.items) m[i.id] = Object.assign({}, i, {ttl: t.title}); return m; };
   function pick3(sel) {
     const pool = []; for (const t of devMastery().topics) if (sel === "all" || sel === t.id) pool.push(...t.items);
@@ -231,21 +233,22 @@
     while (out.length < 3 && pool.length) {
       let r = Math.random() * pool.reduce((a, x) => a + w(x), 0), k = 0;
       for (; k < pool.length - 1; k++) { r -= w(pool[k]); if (r <= 0) break; }
-      out.push({it: pool.splice(k, 1)[0].i, why: ""});
+      const it = pool.splice(k, 1)[0].i, vs = it.vars || [], v = vs.length ? vs[Math.floor(Math.random() * vs.length)] : null;
+      out.push({it, why: "", vt: v ? v.t : "", vq: v ? v.q : ""});
     }
     return out;
   }
-  const todaySet = () => { const M = ITEMS(); return (A.today || []).filter(x => M[x.q]).map(x => ({it: M[x.q], why: x.why})); };
+  const todaySet = () => { const M = ITEMS(); return (A.today || []).filter(x => M[x.q]).map(x => ({it: M[x.q], why: x.why, vt: x.vt || "", vq: x.vq || ""})); };
   // 풀던 문제 보관(이 기기 안 · 새 판 반영·앱 재시작에도 이어서) — 대표님 26.10.04 "풀고 있던 문제가 그냥 사라졌어"
   const QDRAFT = "cd_quiz_draft";
   function saveDraft() {
     if (!QZ || !QZ.qs || !QZ.qs.length) { ls.del(QDRAFT); return; }
-    ls.set(QDRAFT, JSON.stringify(Object.assign({}, QZ, {qs: QZ.qs.map(x => ({q: x.it.id, why: x.why})), at: Date.now()})));
+    ls.set(QDRAFT, JSON.stringify(Object.assign({}, QZ, {qs: QZ.qs.map(x => ({q: x.it.id, why: x.why, vt: x.vt || "", vq: x.vq || ""})), at: Date.now()})));
   }
   function loadDraft() {
     try {
       const d = JSON.parse(ls.get(QDRAFT, "null")); if (!d || Date.now() - d.at > 3 * 864e5) return null;
-      const M = ITEMS(), qs = d.qs.filter(x => M[x.q]).map(x => ({it: M[x.q], why: x.why}));
+      const M = ITEMS(), qs = d.qs.filter(x => M[x.q]).map(x => ({it: M[x.q], why: x.why, vt: x.vt || "", vq: x.vq || ""}));
       return qs.length ? Object.assign(d, {qs}) : null;
     } catch (e) { return null; }
   }
@@ -265,14 +268,14 @@
     const modes = [["sa", "서술"], ["mc", "객관식"]].map(([k, l]) => `<button type="button" class="segb${mode === k ? " on" : ""}" data-qmode="${k}">${l}</button>`).join("");
     let body = "";
     if (QZ && QZ.qs) {
-      body = QZ.qs.map(({it, why}, n) => {
+      body = QZ.qs.map(({it, why, vt, vq}, n) => {
         const r = QZ.res[n], whyH = "";
         if (QZ.mode === "mc") {
           const opts = [...it.opts, "모름"].map((o, j) => `<label class="opt${r ? (j + 1 === it.ans ? " ok" : (QZ.pick[n] === j + 1 ? " bad" : "")) : ""}"><input type="radio" name="q${n}" value="${j + 1}"${QZ.pick[n] === j + 1 ? " checked" : ""}${r ? " disabled" : ""}> ${escH(o)}</label>`).join("");
           return `<div class="card qz">${whyH}<div class="qn">${n + 1}. ${escH(it.mq)}</div>${opts}${r ? `<div class="ex"><b>${r.s === 2 ? "맞음" : r.s === -1 ? "모름" : "틀림"}</b> · 정답은 ${it.ans}번<div class="concept">${escH(it.a)}</div>${opH(it)}<div class="muted small">점수는 학습 세션이 확정합니다 · ${escH(it.ttl)}</div></div>` : ""}</div>`;
         }
-        const qtext = it.sq || it.q;
-        return `<div class="card qz">${whyH}<div class="qn">${n + 1}. ${escH(qtext)}${it.sq ? ' <span class="lvb">적용</span>' : ""}</div><textarea data-sa="${n}" rows="4" placeholder="노트를 보지 말고 기억나는 대로 써 보세요"${QZ.sub ? " disabled" : ""}>${escH(QZ.text[n] || "")}</textarea>${QZ.sub ? `<div class="ex"><b>개념 정리</b><div class="concept">${escH(it.a)}</div>${opH(it)}<div class="muted small">답은 저장됐습니다 · 채점은 학습 세션이 합니다 · ${escH(it.ttl)}</div></div>` : `<button type="button" class="ghost dk" data-dk="${n}">모름</button>`}</div>`;
+        const qtext = vq || it.sq || it.q, vlab = vt || (it.sq ? "상황" : "개념");
+        return `<div class="card qz">${whyH}<div class="qn">${n + 1}. ${escH(qtext)} <span class="lvb">${escH(VLAB[vlab] || vlab)}</span></div><textarea data-sa="${n}" rows="4" placeholder="노트를 보지 말고 기억나는 대로 써 보세요"${QZ.sub ? " disabled" : ""}>${escH(QZ.text[n] || "")}</textarea>${QZ.sub ? `<div class="ex"><b>개념 정리</b><div class="concept">${escH(it.a)}</div>${opH(it)}<div class="muted small">답은 저장됐습니다 · 채점은 학습 세션이 합니다 · ${escH(it.ttl)}</div></div>` : `<button type="button" class="ghost dk" data-dk="${n}">모름</button>`}<a class="askq" href="#/ask/${encodeURIComponent(it.id)}">이 문제에 대해 질문하기 ›</a></div>`;
       }).join("");
       const all = QZ.qs.length && (QZ.mode === "sa" ? QZ.sub : QZ.qs.every((_, n) => QZ.res[n]));
       if (!QZ.qs.length) body = `<div class="card muted">오늘의 문제가 아직 없습니다. 자유 연습을 골라 주세요.</div>`;
@@ -282,7 +285,7 @@
     const dm = devMastery(), P = pending(), wait = new Set(P.filter(r => r.sent).map(r => r.sent)).size, unsent = P.filter(r => !r.sent).length;
     app.innerHTML = bar("문제 풀이", "#/") + `<div class="wrap">
       <div class="muted small" style="margin:2px 2px 8px">지식 수준 ${pct(dm.know)}% · 확인한 개념 ${dm.asked}/${dm.all}(배운 회차 개념 중 한 번이라도 물어본 것)</div>
-      <div class="card sendbox"><div><b>학습 세션에 보내지 않은 답 ${unsent}개</b> · 채점 기다리는 제출 ${wait}건</div>${lastSend()}${unsent ? `<button type="button" class="big-btn" id="qsend2">지금 학습 세션에 보내기</button>` : ""}</div>
+      <div class="card sendbox"><div><b>학습 세션에 보내지 않은 답 ${unsent}개</b> · 채점 기다리는 제출 ${wait}건</div>${lastSend()}${unsent ? `<button type="button" class="big-btn" id="qsend2">지금 학습 세션에 보내기</button>` : ""}<a class="askq" href="#/ask">질문함 · 학습 세션에 질문하기 ›</a></div>
       <div class="seg">${[["today", "오늘의 문제"], ["free", "자유 연습"]].map(([k, l]) => `<button type="button" class="segb${kind === k ? " on" : ""}" data-qkind="${k}">${l}</button>`).join("")}</div>
       ${kind === "free" ? `<div class="seg wrapseg">${chips}</div>` : ""}
       <div class="seg">${modes}</div>${body}</div>` + nav("quiz");
@@ -294,7 +297,7 @@
     const nw = $("#qnew"); if (nw) nw.onclick = () => { QZ = newSet(kind, sel, mode); quiz(); window.scrollTo(0, 0); };
     document.querySelectorAll("textarea[data-sa]").forEach(t => t.oninput = () => { QZ.text[+t.dataset.sa] = t.value; saveDraft(); });
     document.querySelectorAll(".qz input[type=radio]").forEach(r => r.onchange = () => { QZ.pick[+r.name.slice(1)] = +r.value; saveDraft(); });
-    document.querySelectorAll("[data-dk]").forEach(b => b.onclick = () => { const n = +b.dataset.dk; QZ.text[n] = "(모름)"; QZ.ev[n] = {dk: 1}; const it = QZ.qs[n].it; QZ.res[n] = {s: -1, dk: 1}; record(it, "sa", {text: "(모름)", dk: 1, s: null}); quiz(); });
+    document.querySelectorAll("[data-dk]").forEach(b => b.onclick = () => { const n = +b.dataset.dk; QZ.text[n] = "(모름)"; QZ.ev[n] = {dk: 1}; const it = QZ.qs[n].it; QZ.res[n] = {s: -1, dk: 1}; record(it, "sa", {text: "(모름)", dk: 1, s: null, ask: QZ.qs[n].vq || it.sq || it.q, vt: QZ.qs[n].vt || ""}); quiz(); });
     const sb = $("#qsub");
     if (sb) sb.onclick = () => {
       if (QZ.mode === "mc") {
@@ -303,7 +306,7 @@
       }
       if (QZ.mode === "sa") {
         QZ.uid = QZ.uid || [];
-        QZ.qs.forEach(({it}, n) => { if (QZ.res[n]) return; QZ.uid[n] = record(it, "sa", {text: QZ.text[n] || "", dk: 0, s: null}); });
+        QZ.qs.forEach(({it, vt, vq}, n) => { if (QZ.res[n]) return; QZ.uid[n] = record(it, "sa", {text: QZ.text[n] || "", dk: 0, s: null, ask: vq || it.sq || it.q, vt: vt || ""}); });
       }
       QZ.sub = true; quiz();
     };
@@ -339,7 +342,7 @@
     const L = qlog(), un = L.filter(r => !r.sent);
     if (!un.length) { toast("보낼 답이 없습니다"); return; }
     const name = stamp(), M = ITEMS();
-    const payload = {v: 2, name, at: new Date().toISOString(), items: un.map(r => ({q: r.q, m: r.m, t: new Date(r.t).toISOString(), text: r.text || "", choice: r.choice || 0, f: r.f, g: r.g, a: r.a, x: r.x, dk: r.dk, s: r.s, ask: M[r.q] ? (r.m === "mc" ? M[r.q].mq : (M[r.q].sq || M[r.q].q)) : ""}))};
+    const payload = {v: 2, name, at: new Date().toISOString(), items: un.map(r => ({q: r.q, m: r.m, t: new Date(r.t).toISOString(), text: r.text || "", choice: r.choice || 0, f: r.f, g: r.g, a: r.a, x: r.x, dk: r.dk, s: r.s, ask: r.ask || (M[r.q] ? (r.m === "mc" ? M[r.q].mq : (M[r.q].sq || M[r.q].q)) : ""), vt: r.vt || ""}))};
     const tok = await getTok();
     if (!tok) { toast("⚙ 설정 › 관리자 모드에서 제출함 열쇠를 먼저 넣어 주세요"); return; }
     try {
@@ -354,6 +357,64 @@
       saveLog(L); ls.set(LSEND, JSON.stringify({ok: 1, t: Date.now(), n: un.length, sha, name}));
       toast(`보냈습니다 · ${un.length}문항 · 확인 번호 ${sha}`); quiz();
     } catch (e) { ls.set(LSEND, JSON.stringify({ok: 0, t: Date.now(), err: e.message})); toast("보내지 못했습니다(" + e.message + ")"); quiz(); }
+  }
+
+  // ---- 폰 질문 창구(대표님 26.10.04 "문제를 풀다가 추가 질문을 하는 창구") — 답안 제출과 같은 통로(비공개 제출함 · 관리자 키 암호화)
+  // 질문은 이 기기에 먼저 저장 → 보내기 · 답은 학습 세션이 원문을 확인한 뒤 관리자 묶음(A.qa)에 실어 이 화면에 보인다(실시간 대화 아님)
+  const QASK = "cd_ask_log";
+  const askLog = () => { try { return JSON.parse(ls.get(QASK, "[]")); } catch (e) { return []; } };
+  const saveAsk = L => ls.set(QASK, JSON.stringify(L));
+  function askCtx(ref) {
+    if (!ref) return {label: "", text: ""};
+    const M = ITEMS();
+    if (M[ref]) return {label: `${ref} · ${M[ref].concept}`, text: (M[ref].sq || M[ref].q)};
+    const pg = D.pages[ref];
+    return pg ? {label: pg.title, text: ""} : {label: ref, text: ""};
+  }
+  function ask(ref) {
+    if (!A) { location.hash = "#/"; return; }
+    ref = ref || ""; const c = askCtx(ref), L = askLog(), QA = {};
+    for (const x of (A.qa || [])) QA[x.uid] = x;
+    const mine = L.slice().reverse().map(x => {
+      const ans = QA[x.uid];
+      return `<div class="card askitem"><div class="muted small">${escH(new Date(x.t).toLocaleString("ko-KR", {month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit"}))} · ${escH(x.ctx || "일반 질문")} · ${x.sent ? "보냄" + (x.sha ? " · 확인 번호 " + escH(x.sha) : "") : "<b>아직 안 보냄</b>"}</div>
+        <div class="askq-t">${escH(x.text)}</div>${ans ? `<div class="ex"><b>학습 세션의 답</b><div class="concept">${escH(ans.a)}</div><div class="muted small">근거 · ${escH(ans.src)}${ans.d ? " · " + escH(ans.d) : ""}</div></div>` : (x.sent ? `<div class="muted small">답을 준비 중입니다 — 학습 세션이 원문을 확인한 뒤 올립니다</div>` : "")}</div>`;
+    }).join("");
+    const unsent = L.filter(x => !x.sent).length;
+    app.innerHTML = bar("질문하기", ref && /^\d-[BIAE]\d\d$/.test(ref) ? "#/p/" + ref : "#/quiz") + `<div class="wrap">
+      ${c.label ? `<div class="card"><div class="muted small">어디서 묻나</div><b>${escH(c.label)}</b>${c.text ? `<div class="muted small" style="margin-top:4px">${escH(c.text)}</div>` : ""}</div>` : ""}
+      <div class="card"><textarea id="askt" rows="5" placeholder="궁금한 점을 자유롭게 적어 주세요 — 어느 문제·노트에서 물었는지는 함께 보냅니다"></textarea>
+        <button type="button" class="big-btn" id="askgo">질문 보내기</button>
+        <div class="muted small">실시간 대화는 아닙니다 · 학습 세션이 원문을 확인한 뒤 이 화면에 답을 올립니다(관리자 판에만)</div></div>
+      ${unsent ? `<button type="button" class="ghost" id="askre">보내지 못한 질문 ${unsent}개 다시 보내기</button>` : ""}
+      <h3 class="sec">내 질문 ${L.length ? L.length + "개" : ""}</h3>${mine || '<div class="card muted">아직 보낸 질문이 없습니다.</div>'}</div>` + nav("quiz");
+    $("#askgo").onclick = async () => {
+      const t = $("#askt").value.trim(); if (!t) { toast("질문을 적어 주세요"); return; }
+      const L2 = askLog(); L2.push({uid: "q" + stamp(), t: Date.now(), ref, ctx: c.label, text: t, sent: "", sha: ""}); saveAsk(L2);
+      await sendAsk(ref);
+    };
+    const re = $("#askre"); if (re) re.onclick = () => sendAsk(ref);
+    window.scrollTo(0, 0);
+  }
+  async function sendAsk(ref) {
+    const L = askLog(), un = L.filter(x => !x.sent);
+    if (!un.length) { ask(ref); return; }
+    const tok = await getTok();
+    if (!tok) { toast("⚙ 설정 › 관리자 모드에서 제출함 열쇠를 먼저 넣어 주세요 · 질문은 이 기기에 저장해 두었습니다"); ask(ref); return; }
+    const name = "q-" + stamp();
+    const payload = {v: 2, kind: "ask", name, at: new Date().toISOString(), asks: un.map(x => ({uid: x.uid, t: new Date(x.t).toISOString(), ref: x.ref, ctx: x.ctx, text: x.text}))};
+    try {
+      const body = JSON.stringify(await sealA(payload));
+      const r = await fetch(`https://api.github.com/repos/${A.sync.repo}/contents/${A.sync.dir}/${name}.json`, {method: "PUT",
+        headers: {Authorization: "Bearer " + tok, Accept: "application/vnd.github+json"},
+        body: JSON.stringify({message: "폰 질문 " + name, content: b64u(body)})});
+      if (!r.ok) { let m = ""; try { m = (await r.json()).message || ""; } catch (e2) {} throw new Error("HTTP " + r.status + (m ? " " + m : "")); }
+      let sha = ""; try { const j = await r.json(); sha = ((j.commit && j.commit.sha) || "").slice(0, 7); } catch (e2) {}
+      if (!sha) throw new Error("깃허브 응답에 확인 번호가 없음");
+      for (const x of L) if (!x.sent) { x.sent = name; x.sha = sha; }
+      saveAsk(L); toast(`질문을 보냈습니다 · ${un.length}개 · 확인 번호 ${sha}`);
+    } catch (e) { toast("보내지 못했습니다(" + e.message + ") · 질문은 이 기기에 남아 있습니다"); }
+    ask(ref);
   }
 
   // ------------------------------------------------------------ 홈
@@ -408,7 +469,7 @@
     const back = pg.archive ? "#/archive" : "#/";
     const on = pid === "glossary" ? "glossary" : pid === "history" ? "history" : pg.archive ? "archive" : "home";
     if (pg.archive && !A) { location.hash = "#/"; return; }
-    app.innerHTML = bar(pg.title, back) + `<div class="wrap">${chips && pid !== "glossary" ? `<div class="chips">${chips}</div>` : ""}<article class="doc">${pg.html}</article>${rec}
+    app.innerHTML = bar(pg.title, back) + `<div class="wrap">${chips && pid !== "glossary" ? `<div class="chips">${chips}</div>` : ""}<article class="doc">${pg.html}</article>${rec}${A && tid ? `<a class="askq" href="#/ask/${tid}">이 노트에 대해 학습 세션에 질문하기 ›</a>` : ""}
       ${pid === "about" ? `<div class="foot"><button id="lo">이 기기에서 잠그기</button></div>` : ""}</div>` + nav(on);
     if (pid === "about") $("#lo").onclick = () => { store.del(); location.hash = "#/"; location.reload(); };
     if (sid) {
@@ -435,6 +496,7 @@
     else if (h[0] === "archive") { if (on3("archive")) archive(); else location.hash = "#/"; }
     else if (h[0] === "settings") settings();
     else if (h[0] === "quiz") quiz();
+    else if (h[0] === "ask") ask(h[1] && decodeURIComponent(h[1]));
     else { home(); window.scrollTo(0, 0); }
   }
   function start() {
