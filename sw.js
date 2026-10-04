@@ -1,5 +1,5 @@
 // 대드론 학습 — 오프라인 캐시. 데이터는 네트워크 우선(새 정리가 바로 보이게), 나머지는 캐시 우선.
-const CACHE = "cd-study-623be36553";
+const CACHE = "cd-study-b872d955f4";
 const SHELL = ["./", "index.html", "app.css", "app.js", "manifest.json", "icon-180.png", "icon-192.png", "icon-512.png", "data.enc.json"];
 // index.html 도 네트워크 우선(앱 틀이 바뀌면 바로 반영) · 오프라인이면 캐시
 self.addEventListener("install", e => {
