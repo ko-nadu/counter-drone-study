@@ -469,13 +469,66 @@
     const back = pg.archive ? "#/archive" : "#/";
     const on = pid === "glossary" ? "glossary" : pid === "history" ? "history" : pg.archive ? "archive" : "home";
     if (pg.archive && !A) { location.hash = "#/"; return; }
-    app.innerHTML = bar(pg.title, back) + `<div class="wrap">${chips && pid !== "glossary" ? `<div class="chips">${chips}</div>` : ""}<article class="doc">${pg.html}</article>${rec}${A && tid ? `<a class="askq" href="#/ask/${tid}">이 노트에 대해 학습 세션에 질문하기 ›</a>` : ""}
+    const au = A && tid && A.audio && A.audio[tid];
+    const audH = au ? `<div class="card aud"><div><b>🎧 듣기</b> <span class="muted small">두 진행자 대화 · 약 ${Math.round(au.dur / 60)}분 · 화면을 꺼도 이어집니다</span></div>
+      <button type="button" class="big-btn" id="aplay">${AUD.tid === tid && !AUD.el.paused ? "❚❚ 일시정지" : "▶ 듣기"}</button>
+      <div class="aud-r"><button type="button" class="ghost" data-ask="-10">« 10초</button><input type="range" id="aseek" min="0" max="${au.dur}" value="0" aria-label="재생 위치"><button type="button" class="ghost" data-ask="10">10초 »</button></div>
+      <div class="aud-r"><span class="muted small" id="atime">0:00 / ${fmtT(au.dur)}</span><select id="arate" aria-label="속도">${[0.8, 1, 1.25, 1.5].map(r => `<option value="${r}"${(+ls.get("cd_aud_rate", "1")) === r ? " selected" : ""}>${r}배</option>`).join("")}</select></div></div>` : "";
+    app.innerHTML = bar(pg.title, back) + `<div class="wrap">${chips && pid !== "glossary" ? `<div class="chips">${chips}</div>` : ""}${audH}<article class="doc">${pg.html}</article>${rec}${A && tid ? `<a class="askq" href="#/ask/${tid}">이 노트에 대해 학습 세션에 질문하기 ›</a>` : ""}
       ${pid === "about" ? `<div class="foot"><button id="lo">이 기기에서 잠그기</button></div>` : ""}</div>` + nav(on);
     if (pid === "about") $("#lo").onclick = () => { store.del(); location.hash = "#/"; location.reload(); };
+    if (au) audBind(tid, pg.title, au);
     if (sid) {
       const el = document.getElementById(sid);
       if (el) { const box = el.closest("section.cs,tr") || el; box.scrollIntoView({block: "start"}); window.scrollBy(0, -64); box.classList.add("flash"); }
     } else window.scrollTo(0, 0);
+  }
+  // ---- 회차 음성 듣기(대표님 26.10.04 · 대표님만) — 관리자 키로 암호화된 음성을 받아 이 기기 보관함(cd-audio)에 두고, 풀어서 재생
+  // 재생기는 하나(AUD)라 다른 화면으로 옮겨도 계속 들림 · 들은 위치·속도 기억 · 잠금 화면·블루투스 조작(Media Session)
+  const AUD = {el: new Audio(), tid: "", url: ""};
+  const fmtT = s => { s = Math.max(0, Math.floor(s || 0)); return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`; };
+  async function audLoad(tid, au) {
+    let buf;
+    try {
+      const c = await caches.open("cd-audio"); let r = await c.match(au.f);
+      if (!r) {
+        r = await fetch(au.f, {cache: "no-store"}); if (!r.ok) throw new Error("HTTP " + r.status);
+        for (const k of await c.keys()) if (new URL(k.url).pathname.includes("/aud/" + tid + "-")) await c.delete(k);  // 옛 판 정리
+        await c.put(au.f, r.clone());
+      }
+      buf = new Uint8Array(await r.arrayBuffer());
+    } catch (e) { const r = await fetch(au.f, {cache: "no-store"}); if (!r.ok) throw new Error("HTTP " + r.status); buf = new Uint8Array(await r.arrayBuffer()); }
+    const k = await crypto.subtle.importKey("raw", akeyRaw(), "AES-GCM", false, ["decrypt"]);
+    const pt = await crypto.subtle.decrypt({name: "AES-GCM", iv: buf.slice(0, 12)}, k, buf.slice(12));
+    return URL.createObjectURL(new Blob([pt], {type: "audio/mpeg"}));
+  }
+  function audBind(tid, title, au) {
+    const el = AUD.el, pb = $("#aplay"), sk = $("#aseek"), tm = $("#atime"), rt = $("#arate"), pk = "cd_aud_pos_" + tid;
+    const sync = () => { if (AUD.tid !== tid) return; sk.value = Math.floor(el.currentTime); tm.textContent = `${fmtT(el.currentTime)} / ${fmtT(au.dur)}`; pb.textContent = el.paused ? "▶ 이어 듣기" : "❚❚ 일시정지"; };
+    if (AUD.tid !== tid) { const p = +ls.get(pk, "0"); sk.value = p; tm.textContent = `${fmtT(p)} / ${fmtT(au.dur)}`; if (p > 5) pb.textContent = "▶ 이어 듣기"; } else sync();
+    el.ontimeupdate = () => { sync(); if (AUD.tid && Math.floor(el.currentTime) % 5 === 0) ls.set("cd_aud_pos_" + AUD.tid, String(Math.floor(el.currentTime))); };
+    el.onplay = el.onpause = sync;
+    el.onended = () => { ls.set("cd_aud_pos_" + AUD.tid, "0"); sync(); };
+    const start = async () => {
+      if (AUD.tid !== tid) {
+        pb.textContent = "받는 중…"; pb.disabled = true;
+        try { if (AUD.url) URL.revokeObjectURL(AUD.url); AUD.url = await audLoad(tid, au); }
+        catch (e) { pb.disabled = false; pb.textContent = "▶ 듣기"; toast("음성을 받지 못했습니다(" + e.message + ")"); return; }
+        pb.disabled = false; AUD.tid = tid; el.src = AUD.url; el.currentTime = +ls.get(pk, "0");
+      }
+      el.playbackRate = +rt.value; await el.play().catch(() => {});
+      if ("mediaSession" in navigator) {
+        navigator.mediaSession.metadata = new MediaMetadata({title, artist: "대드론 학습 노트", album: "두 진행자 대화"});
+        navigator.mediaSession.setActionHandler("play", () => el.play());
+        navigator.mediaSession.setActionHandler("pause", () => el.pause());
+        navigator.mediaSession.setActionHandler("seekbackward", () => { el.currentTime = Math.max(0, el.currentTime - 10); });
+        navigator.mediaSession.setActionHandler("seekforward", () => { el.currentTime = Math.min(el.duration || au.dur, el.currentTime + 10); });
+      }
+    };
+    pb.onclick = () => { if (AUD.tid === tid && !el.paused) el.pause(); else start(); };
+    document.querySelectorAll("[data-ask]").forEach(b => b.onclick = () => { if (AUD.tid === tid) el.currentTime = Math.max(0, Math.min(el.duration || au.dur, el.currentTime + (+b.dataset.ask))); });
+    sk.oninput = () => { if (AUD.tid === tid) el.currentTime = +sk.value; else ls.set(pk, sk.value); tm.textContent = `${fmtT(+sk.value)} / ${fmtT(au.dur)}`; };
+    rt.onchange = () => { ls.set("cd_aud_rate", rt.value); el.playbackRate = +rt.value; };
   }
   function archive() {
     const recs = D.topics.filter(t => t.has_rec).map(t => `<a class="item" href="#/p/rec-${t.id}"><span class="rk rk-${t.lvl}">${t.code}</span><span>${escH(D.pages["rec-" + t.id].title)}<small>문답 · 설명과 첨삭 · 교재 재료 · 논문 포인트</small></span></a>`).join("");

@@ -289,3 +289,10 @@ details.topic>.sum .more{color:var(--muted);font-size:14px}
 .askitem .ex{margin-top:8px}
 #askt{width:100%;box-sizing:border-box;font:inherit;padding:10px;border-radius:10px;border:1px solid var(--line);background:var(--card);color:var(--text)}
 h3.sec{margin:18px 4px 8px;font-size:15px}
+
+/* 회차 음성 듣기(26.10.04 · 관리자 모드) */
+.aud .big-btn{margin:10px 0 6px}
+.aud-r{display:flex;align-items:center;gap:8px;margin-top:6px}
+.aud-r input[type=range]{flex:1;min-width:0}
+.aud-r .ghost{flex:none;padding:6px 10px}
+.aud-r select{margin-left:auto;font:inherit;padding:4px 6px;border-radius:8px;border:1px solid var(--line);background:var(--card);color:var(--text)}
