@@ -273,3 +273,12 @@ details.topic>.sum .more{color:var(--muted);font-size:14px}
 .sendbox .big-btn{margin:4px 0 0}
 .updb{position:fixed;left:12px;right:12px;bottom:84px;z-index:60;display:flex;gap:10px;align-items:center;justify-content:space-between;background:var(--card);border:1px solid var(--hot-line);border-radius:12px;padding:10px 12px;box-shadow:0 6px 20px rgba(0,0,0,.18);font-size:14px}
 .updb button{flex:none}
+/* 새 정리 묻기·홈 알림 · 개념 정리 · 대표 의견 (26.10.04) */
+.updask{position:fixed;inset:0;z-index:80;background:rgba(0,0,0,.35);display:flex;align-items:flex-end;justify-content:center;padding:16px}
+.updask .box{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:16px;max-width:520px;width:100%;margin-bottom:76px}
+.updask .box p{margin:6px 0 12px;font-size:14px;color:var(--muted)}
+.updask .row{display:flex;gap:8px}.updask .row .big-btn{flex:1;margin:0}
+.updtop{display:block;width:100%;text-align:left;margin:0 0 12px;padding:12px 14px;border-radius:12px;border:1px solid var(--hot-line);background:var(--hot);color:var(--text);font-weight:700;font-size:15px}
+.ex .concept{margin:6px 0;line-height:1.65}
+.ex .op{margin:8px 0;padding:8px 10px;border-left:3px solid var(--hot-line);background:var(--hot);border-radius:0 8px 8px 0;font-size:14px}
+

@@ -16,6 +16,7 @@
     const m = document.querySelector('meta[name="theme-color"]'); if (m) m.setAttribute("content", dark ? "#10151d" : "#f7f9fc");
   }
   const tbtn = () => `<button class="tbtn" type="button" data-th aria-label="화면 모드">${THL[getTh()]}</button>`;
+  document.addEventListener("click", e => { if (e.target.closest("#updtop")) applyUpd(); });
   document.addEventListener("click", e => { if (e.target.closest("[data-th]")) { const c = getTh(); setTh(TH[(TH.indexOf(c) + 1) % 3]); } });
   // ---- 설치(안드로이드 크롬 등): 브라우저가 설치 가능하다고 알려 주면 홈에 '설치' 버튼
   const standalone = () => matchMedia("(display-mode: standalone)").matches || navigator.standalone === true;
@@ -160,7 +161,6 @@
   function devMastery() {
     const now = Date.now(), by = {};
     for (const r of (A.pc.recs || [])) (by[r.q] = by[r.q] || []).push({s: r.s, t: Date.parse(r.d + "T12:00:00")});
-    for (const r of pending()) if (r.s != null) (by[r.q] = by[r.q] || []).push({s: r.s, t: r.t, p: 1});
     let asked = 0, all = 0;
     const topics = A.bank.map(t => {
       const items = t.items.map(i => { const rs = (by[i.id] || []).sort((a, b) => a.t - b.t); return {i, m: cm(rs, now), n: rs.length, p: rs.some(x => x.p)}; });
@@ -174,8 +174,8 @@
   const pct = x => Math.round((x || 0) * 100);
   function rateCard() {  // 홈 상단 — 지식 수준(큰 숫자) · 진도(작게) → 누르면 회차별
     const dm = devMastery();
-    const rows = dm.topics.map(t => `<div class="rrow"><span class="t">${escH(t.id.replace(/^(\d)-/, "$1부 "))} ${escH(t.title.split(" — ")[0])}</span><span class="v">${t.know == null ? "—" : pct(t.know) + "%"}</span><div class="track"><i style="width:${pct(t.know)}%"></i></div><span class="muted small">${t.lv != null ? "수준 L" + t.lv + " · " : ""}확인 ${t.asked}/${t.items.length} 개념${t.prov ? " · 가채점 포함" : ""}</span></div>`).join("");
-    return `<details class="card rate"><summary><div class="rrow top"><span class="t">지식 수준</span><span class="v big">${pct(dm.know)}%</span><div class="track"><i style="width:${pct(dm.know)}%"></i></div><span class="muted small">확인한 개념 ${dm.asked}/${dm.all} · 학습 세션 채점${dm.prov ? " + 이 기기 가채점" : ""} · 누르면 회차별</span></div></summary>${rows}<a class="go" href="#/quiz">오늘의 문제 ›</a></details>`;
+    const rows = dm.topics.map(t => `<div class="rrow"><span class="t">${escH(t.id.replace(/^(\d)-/, "$1부 "))} ${escH(t.title.split(" — ")[0])}</span><span class="v">${t.know == null ? "—" : pct(t.know) + "%"}</span><div class="track"><i style="width:${pct(t.know)}%"></i></div><span class="muted small">${t.lv != null ? "수준 L" + t.lv + " · " : ""}확인 ${t.asked}/${t.items.length} 개념</span></div>`).join("");
+    return `<details class="card rate"><summary><div class="rrow top"><span class="t">지식 수준</span><span class="v big">${pct(dm.know)}%</span><div class="track"><i style="width:${pct(dm.know)}%"></i></div><span class="muted small">확인한 개념 ${dm.asked}/${dm.all} · 학습 세션 채점 · 누르면 회차별</span></div></summary>${rows}<a class="go" href="#/quiz">오늘의 문제 ›</a></details>`;
   }
 
   // ---- 설정(⚙): 화면 보기(누구나) · 관리자 모드(관리자 비밀번호)
@@ -256,16 +256,7 @@
     const L = qlog(); L.push(Object.assign({v: 2, uid, q: it.id, m: mode, t: Date.now(), sent: ""}, o)); saveLog(L); return uid;
   }
   function patchRec(uid, o) { const L = qlog(); const r = L.find(x => x.uid === uid); if (r) Object.assign(r, o); saveLog(L); }
-  const SC = e => e.dk ? -1 : (e.f || 0) + (e.g || 0) + (e.a || 0) + (e.x ? -1 : 0);
-  function evBox(n, e) {
-    const b = (k, v, l) => `<button type="button" class="segb${e[k] === v ? " on" : ""}" data-ev="${n}" data-k="${k}" data-v="${v}">${l}</button>`;
-    return `<div class="evx"><div class="muted small">스스로 평가(학습 세션과 같은 기준 · 가채점)</div>
-      <div class="evr"><span>핵심 사실</span><div class="seg">${b("f", 0, "없음")}${b("f", 1, "일부")}${b("f", 2, "정확")}</div></div>
-      <div class="evr"><span>근거(법·문서·숫자)</span><div class="seg">${b("g", 0, "못 댐")}${b("g", 1, "댐")}</div></div>
-      <div class="evr"><span>이유·적용</span><div class="seg">${b("a", 0, "못 댐")}${b("a", 1, "댐")}</div></div>
-      <label class="chk"><input type="checkbox" data-evx="${n}"${e.x ? " checked" : ""}> 틀린 사실을 확신하며 썼다(-1)</label>
-      <button type="button" class="ghost" data-evsave="${n}">평가 저장 · ${SC(e)}점</button></div>`;
-  }
+  const opH = it => it.op ? `<div class="op"><b>지난번 대표님 생각</b> — ${escH(it.op)}</div>` : "";
   function quiz() {
     if (!on3("quiz")) { location.hash = "#/"; return; }
     if (!QZ) { const d = loadDraft(); if (d) { QZ = d; setTimeout(() => toast("풀던 문제를 이어서 보여 드립니다"), 50); } }
@@ -275,13 +266,13 @@
     let body = "";
     if (QZ && QZ.qs) {
       body = QZ.qs.map(({it, why}, n) => {
-        const r = QZ.res[n], whyH = why ? `<div class="why">왜 이 문제: ${escH(why)}</div>` : "";
+        const r = QZ.res[n], whyH = "";
         if (QZ.mode === "mc") {
           const opts = [...it.opts, "모름"].map((o, j) => `<label class="opt${r ? (j + 1 === it.ans ? " ok" : (QZ.pick[n] === j + 1 ? " bad" : "")) : ""}"><input type="radio" name="q${n}" value="${j + 1}"${QZ.pick[n] === j + 1 ? " checked" : ""}${r ? " disabled" : ""}> ${escH(o)}</label>`).join("");
-          return `<div class="card qz">${whyH}<div class="qn">${n + 1}. ${escH(it.mq)}</div>${opts}${r ? `<div class="ex"><b>${r.s === 2 ? "정답 · 2점" : r.s === -1 ? "모름 · -1점" : "오답 · 0점"}</b> · 정답은 ${it.ans}번 — ${escH(it.a)}<div class="muted small">근거: ${escH(it.src)} · ${escH(it.ttl)}</div></div>` : ""}</div>`;
+          return `<div class="card qz">${whyH}<div class="qn">${n + 1}. ${escH(it.mq)}</div>${opts}${r ? `<div class="ex"><b>${r.s === 2 ? "맞음" : r.s === -1 ? "모름" : "틀림"}</b> · 정답은 ${it.ans}번<div class="concept">${escH(it.a)}</div>${opH(it)}<div class="muted small">점수는 학습 세션이 확정합니다 · ${escH(it.ttl)}</div></div>` : ""}</div>`;
         }
-        const qtext = it.sq || it.q, e = QZ.ev[n] || {};
-        return `<div class="card qz">${whyH}<div class="qn">${n + 1}. ${escH(qtext)}${it.sq ? ' <span class="lvb">적용</span>' : ""}</div><textarea data-sa="${n}" rows="4" placeholder="노트를 보지 말고 기억나는 대로 써 보세요"${QZ.sub ? " disabled" : ""}>${escH(QZ.text[n] || "")}</textarea>${QZ.sub ? `<div class="ex"><b>모범 답안</b> — ${escH(it.a)}<div class="muted small">근거: ${escH(it.src)} · ${escH(it.ttl)}</div>${r ? `<div class="self done">가채점 ${r.s}점${r.dk ? " (모름)" : ""} · 학습 세션이 다시 채점합니다</div>` : `<div class="muted small">답은 저장됐습니다 · 자기 평가는 해도 되고 안 해도 됩니다(학습 세션이 채점)</div>` + evBox(n, e)}</div>` : `<button type="button" class="ghost dk" data-dk="${n}">모름(-1)</button>`}</div>`;
+        const qtext = it.sq || it.q;
+        return `<div class="card qz">${whyH}<div class="qn">${n + 1}. ${escH(qtext)}${it.sq ? ' <span class="lvb">적용</span>' : ""}</div><textarea data-sa="${n}" rows="4" placeholder="노트를 보지 말고 기억나는 대로 써 보세요"${QZ.sub ? " disabled" : ""}>${escH(QZ.text[n] || "")}</textarea>${QZ.sub ? `<div class="ex"><b>개념 정리</b><div class="concept">${escH(it.a)}</div>${opH(it)}<div class="muted small">답은 저장됐습니다 · 채점은 학습 세션이 합니다 · ${escH(it.ttl)}</div></div>` : `<button type="button" class="ghost dk" data-dk="${n}">모름</button>`}</div>`;
       }).join("");
       const all = QZ.qs.length && (QZ.mode === "sa" ? QZ.sub : QZ.qs.every((_, n) => QZ.res[n]));
       if (!QZ.qs.length) body = `<div class="card muted">오늘의 문제가 아직 없습니다. 자유 연습을 골라 주세요.</div>`;
@@ -293,7 +284,7 @@
       <div class="muted small" style="margin:2px 2px 8px">지식 수준 ${pct(dm.know)}% · 확인한 개념 ${dm.asked}/${dm.all}(배운 회차 개념 중 한 번이라도 물어본 것)</div>
       <div class="card sendbox"><div><b>학습 세션에 보내지 않은 답 ${unsent}개</b> · 채점 기다리는 제출 ${wait}건</div>${lastSend()}${unsent ? `<button type="button" class="big-btn" id="qsend2">지금 학습 세션에 보내기</button>` : ""}</div>
       <div class="seg">${[["today", "오늘의 문제"], ["free", "자유 연습"]].map(([k, l]) => `<button type="button" class="segb${kind === k ? " on" : ""}" data-qkind="${k}">${l}</button>`).join("")}</div>
-      ${kind === "free" ? `<div class="seg wrapseg">${chips}</div>` : `<div class="muted small" style="margin:6px 2px">학습 세션이 대화 기록을 보고 고른 문제입니다(약한 개념 → 아직 확인 안 한 개념)</div>`}
+      ${kind === "free" ? `<div class="seg wrapseg">${chips}</div>` : ""}
       <div class="seg">${modes}</div>${body}</div>` + nav("quiz");
     saveDraft();
     const reset = o => { QZ = Object.assign({sel, mode, kind}, o); quiz(); };
@@ -303,29 +294,19 @@
     const nw = $("#qnew"); if (nw) nw.onclick = () => { QZ = newSet(kind, sel, mode); quiz(); window.scrollTo(0, 0); };
     document.querySelectorAll("textarea[data-sa]").forEach(t => t.oninput = () => { QZ.text[+t.dataset.sa] = t.value; saveDraft(); });
     document.querySelectorAll(".qz input[type=radio]").forEach(r => r.onchange = () => { QZ.pick[+r.name.slice(1)] = +r.value; saveDraft(); });
-    document.querySelectorAll("[data-dk]").forEach(b => b.onclick = () => { const n = +b.dataset.dk; QZ.text[n] = "(모름)"; QZ.ev[n] = {dk: 1}; const it = QZ.qs[n].it; QZ.res[n] = {s: -1, dk: 1}; record(it, "sa", {text: "(모름)", f: 0, g: 0, a: 0, x: 0, dk: 1, s: -1}); quiz(); });
+    document.querySelectorAll("[data-dk]").forEach(b => b.onclick = () => { const n = +b.dataset.dk; QZ.text[n] = "(모름)"; QZ.ev[n] = {dk: 1}; const it = QZ.qs[n].it; QZ.res[n] = {s: -1, dk: 1}; record(it, "sa", {text: "(모름)", dk: 1, s: null}); quiz(); });
     const sb = $("#qsub");
     if (sb) sb.onclick = () => {
       if (QZ.mode === "mc") {
         if (QZ.qs.some((_, n) => !QZ.pick[n])) { toast("모든 문제를 고른 뒤 제출하세요"); return; }
-        QZ.qs.forEach(({it}, n) => { const c = QZ.pick[n], s = c === 5 ? -1 : c === it.ans ? 2 : 0; QZ.res[n] = {s}; record(it, "mc", {choice: c, f: Math.max(0, s), g: 0, a: 0, x: 0, dk: c === 5 ? 1 : 0, s}); });
+        QZ.qs.forEach(({it}, n) => { const c = QZ.pick[n], s = c === 5 ? -1 : c === it.ans ? 2 : 0; QZ.res[n] = {s}; record(it, "mc", {choice: c, dk: c === 5 ? 1 : 0, s: null}); });
       }
       if (QZ.mode === "sa") {
         QZ.uid = QZ.uid || [];
-        QZ.qs.forEach(({it}, n) => { if (QZ.res[n]) return; QZ.uid[n] = record(it, "sa", {text: QZ.text[n] || "", f: null, g: null, a: null, x: 0, dk: 0, s: null}); });
+        QZ.qs.forEach(({it}, n) => { if (QZ.res[n]) return; QZ.uid[n] = record(it, "sa", {text: QZ.text[n] || "", dk: 0, s: null}); });
       }
       QZ.sub = true; quiz();
     };
-    document.querySelectorAll("[data-ev]").forEach(b => b.onclick = () => { const n = +b.dataset.ev; QZ.ev[n] = Object.assign(QZ.ev[n] || {}, {[b.dataset.k]: +b.dataset.v}); quiz(); });
-    document.querySelectorAll("[data-evx]").forEach(c => c.onchange = () => { const n = +c.dataset.evx; QZ.ev[n] = Object.assign(QZ.ev[n] || {}, {x: c.checked ? 1 : 0}); quiz(); });
-    document.querySelectorAll("[data-evsave]").forEach(b => b.onclick = () => {
-      const n = +b.dataset.evsave, e = QZ.ev[n] || {};
-      if (e.f == null) { toast("핵심 사실부터 골라 주세요"); return; }
-      const s = SC(e); QZ.res[n] = {s};
-      const o = {text: QZ.text[n] || "", f: e.f, g: e.g || 0, a: e.a || 0, x: e.x || 0, dk: 0, s};
-      if (QZ.uid && QZ.uid[n]) patchRec(QZ.uid[n], o); else record(QZ.qs[n].it, "sa", o);
-      quiz();
-    });
     const sd = $("#qsend"); if (sd) sd.onclick = () => sendPhone();
     const sd2 = $("#qsend2"); if (sd2) sd2.onclick = () => sendPhone();
   }
@@ -396,7 +377,7 @@
       }).join("")}</details>`;
     }).join("");
 
-    app.innerHTML = bar() + `<div class="wrap">
+    app.innerHTML = bar() + `<div class="wrap">${updTop()}
       <div class="hello">한 회차씩,<br>대드론 체계를 쌓아갑니다.</div>
       ${on3("quiz") ? rateCard() : ""}
       <div class="search"><input id="q" type="search" placeholder="용어·주제·회차 검색 (예: C-UAS)" aria-label="검색" enterkeyhint="search"><button class="x" id="qx" aria-label="지우기" hidden>×</button></div>
@@ -467,10 +448,10 @@
     window.__cdReady = true;
     showInstall();
     // 앱이 백그라운드에 있다가 다시 열리면 새 정리가 있는지 확인해 바로 반영
-    document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible") refresh(); });
-    setInterval(refresh, 10 * 60 * 1000);
+    document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible") refresh(true); });
+    setInterval(() => { if (document.visibilityState === "visible") refresh(false); }, 10 * 60 * 1000);
   }
-  async function refresh() {
+  async function refresh(resumed) {
     try {
       const enc = await fetchEnc();
       let changed = enc.ct && enc.ct !== CT;
@@ -478,19 +459,21 @@
       if (!changed) return;
       if (enc.salt !== (store.get() || "").split(".")[0]) { location.reload(); return; }  // 비밀번호가 바뀜 → 잠금 화면
       // 새 정리 → 자료만 바꾸지 않고 다시 불러온다(화면 코드 app.js·app.css 도 최신으로)
-      if (busy()) { updBanner(); return; }
-      applyUpd();
+      if (resumed && !busy()) { applyUpd(); return; }   // 뒤에 있다가 돌아옴 + 푸는 중 아님 → 바로
+      askUpd();                                           // 화면에 떠 있음 또는 푸는 중 → 묻는다
     } catch (e) {}
   }
   let UPD = false;
   function applyUpd() { try { sessionStorage.setItem("cd_upd", "1"); } catch (e) {} saveDraft(); location.reload(); }
-  function updBanner() {
-    UPD = true; if ($("#updb")) return;
-    const el = document.createElement("div"); el.id = "updb"; el.className = "updb";
-    el.innerHTML = `<span>새 정리가 준비됐습니다 · 푸는 문제는 그대로 둡니다</span><button type="button">지금 받기</button>`;
-    document.body.appendChild(el); el.querySelector("button").onclick = applyUpd;
+  function askUpd() {
+    if (UPD || $("#updask")) return;
+    const el = document.createElement("div"); el.id = "updask"; el.className = "updask"; el.setAttribute("role", "dialog");
+    el.innerHTML = `<div class="box"><b>새 정리가 있습니다</b><p>지금 받으면 최신 내용으로 다시 열립니다. 푸는 문제는 그대로 보관됩니다.</p><div class="row"><button type="button" class="big-btn" data-u="now">지금 받기</button><button type="button" class="ghost" data-u="later">나중에</button></div></div>`;
+    document.body.appendChild(el);
+    el.querySelector('[data-u="now"]').onclick = applyUpd;
+    el.querySelector('[data-u="later"]').onclick = () => { UPD = true; el.remove(); if (/^#\/?$/.test(location.hash) || !location.hash) home(); };
   }
-  window.addEventListener("hashchange", () => { if (UPD && !busy()) applyUpd(); });
+  const updTop = () => UPD ? `<button type="button" class="updtop" id="updtop">⟳ 새 정리가 있습니다 · 눌러서 받기</button>` : "";
   function toast(t) {
     const el = document.createElement("div"); el.className = "toast"; el.textContent = t; document.body.appendChild(el);
     setTimeout(() => el.remove(), 3500);
