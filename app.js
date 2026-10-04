@@ -464,7 +464,7 @@
     const pg = D.pages[pid];
     if (!pg) { location.hash = "#/"; return; }
     const chips = pg.secs.filter(s => s.level === 2).map(s => `<a href="#/p/${pid}/${s.id}">${escH(s.title.replace(/\s*\(.*$/, ""))}</a>`).join("");
-    const tid = /^\d-[BIAE]\d\d$/.test(pid) ? pid : null;
+    const tid = /^\d-(?:[BIAE]\d\d|CHK)$/.test(pid) ? pid : null;
     const rec = tid && D.pages["rec-" + tid] ? `<a class="recnote" href="#/p/rec-${tid}">이 회차를 공부한 과정(문답·첨삭·교재 재료·논문 포인트)은 <b>보관함 › 학습 기록</b>에 있습니다 ›</a>` : "";
     const back = pg.archive ? "#/archive" : "#/";
     const on = pid === "glossary" ? "glossary" : pid === "history" ? "history" : pg.archive ? "archive" : "home";
