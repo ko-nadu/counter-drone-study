@@ -497,7 +497,7 @@
   }
   // ---- 회차 음성 듣기(대표님 26.10.04 · 대표님만) — 관리자 키로 암호화된 음성을 받아 이 기기 보관함(cd-audio)에 두고, 풀어서 재생
   // 재생기는 하나(AUD)라 다른 화면으로 옮겨도 계속 들림 · 들은 위치·속도 기억 · 잠금 화면·블루투스 조작(Media Session)
-  const AUD = {el: new Audio(), tid: "", url: ""};
+  const AUD = {el: new Audio(), tid: "", url: "", f: ""};
   const fmtT = s => { s = Math.max(0, Math.floor(s || 0)); return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`; };
   async function audLoad(tid, au) {
     let buf;
@@ -515,6 +515,7 @@
     return URL.createObjectURL(new Blob([pt], {type: "audio/mpeg"}));
   }
   function audBind(tid, title, au) {
+    if (AUD.tid === tid && AUD.f !== au.f) { AUD.el.pause(); AUD.tid = ""; }   // 새 판 음성이 올라오면 받아 둔 옛 음성을 버리고 새로 받는다(26.11.11 · 앱을 끄지 않고 다시 열 때 옛 목소리가 남던 경로)
     const el = AUD.el, pb = $("#aplay"), sk = $("#aseek"), tm = $("#atime"), rt = $("#arate"), pk = "cd_aud_pos_" + tid;
     const sync = () => { if (AUD.tid !== tid) return; sk.value = Math.floor(el.currentTime); tm.textContent = `${fmtT(el.currentTime)} / ${fmtT(au.dur)}`; pb.textContent = el.paused ? "▶ 이어 듣기" : "❚❚ 일시정지"; };
     if (AUD.tid !== tid) { const p = +ls.get(pk, "0"); sk.value = p; tm.textContent = `${fmtT(p)} / ${fmtT(au.dur)}`; if (p > 5) pb.textContent = "▶ 이어 듣기"; } else sync();
@@ -526,7 +527,7 @@
         pb.textContent = "받는 중…"; pb.disabled = true;
         try { if (AUD.url) URL.revokeObjectURL(AUD.url); AUD.url = await audLoad(tid, au); }
         catch (e) { pb.disabled = false; pb.textContent = "▶ 듣기"; toast("음성을 받지 못했습니다(" + e.message + ")"); return; }
-        pb.disabled = false; AUD.tid = tid; el.src = AUD.url; el.currentTime = +ls.get(pk, "0");
+        pb.disabled = false; AUD.tid = tid; AUD.f = au.f; el.src = AUD.url; el.currentTime = +ls.get(pk, "0");
       }
       el.playbackRate = +rt.value; await el.play().catch(() => {});
       if ("mediaSession" in navigator) {
