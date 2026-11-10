@@ -296,3 +296,15 @@ h3.sec{margin:18px 4px 8px;font-size:15px}
 .aud-r input[type=range]{flex:1;min-width:0}
 .aud-r .ghost{flex:none;padding:6px 10px}
 .aud-r select{margin-left:auto;font:inherit;padding:4px 6px;border-radius:8px;border:1px solid var(--line);background:var(--card);color:var(--text)}
+/* 과목 단계(2026-11-10) */
+.subj{margin:4px 0 14px}
+.subj .sj-h{display:flex;align-items:baseline;gap:8px;padding:12px 14px;background:var(--accent-soft);border:1px solid var(--line);border-radius:14px;list-style:none;cursor:default}
+details.subj>summary.sj-h{cursor:pointer}
+details.subj>summary::-webkit-details-marker{display:none}
+.sj-n{font-size:12.5px;font-weight:800;color:var(--accent);letter-spacing:.02em}
+.sj-t{font-size:18px;font-weight:800;color:var(--text);flex:1;min-width:0}
+.sj-c{font-size:13px;font-weight:700;color:var(--muted);white-space:nowrap}
+.sj-d{margin:8px 4px 10px;font-size:14px;line-height:1.55;color:var(--muted)}
+/* AI 생성 장면 배지(운영플랜 6-2) */
+figure.fig.ai{position:relative}
+.aibadge{position:absolute;top:20px;left:20px;z-index:1;font-size:12px;font-weight:800;color:#fff;background:rgba(20,28,40,.78);padding:3px 8px;border-radius:8px}

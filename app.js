@@ -175,7 +175,7 @@
   function rateCard() {  // 홈 상단 — 지식 수준(큰 숫자) · 진도(작게) → 누르면 회차별
     const dm = devMastery();
     const rows = dm.topics.map(t => `<div class="rrow"><span class="t">${escH(t.id.replace(/^(\d)-/, "$1부 "))} ${escH(t.title.split(" — ")[0])}</span><span class="v">${t.know == null ? "—" : pct(t.know) + "%"}</span><div class="track"><i style="width:${pct(t.know)}%"></i></div><span class="muted small">${t.lv != null ? "수준 L" + t.lv + " · " : ""}확인 ${t.asked}/${t.items.length} 개념</span></div>`).join("");
-    return `<details class="card rate"><summary><div class="rrow top"><span class="t">지식 수준</span><span class="v big">${pct(dm.know)}%</span><div class="track"><i style="width:${pct(dm.know)}%"></i></div><span class="muted small">확인한 개념 ${dm.asked}/${dm.all} · 학습 세션 채점 · 누르면 회차별</span></div></summary>${rows}<a class="go" href="#/quiz">오늘의 문제 ›</a></details>`;
+    return `<details class="card rate"><summary><div class="rrow top"><span class="t">지식 수준 <span class="muted small">(선택 복습 기준)</span></span><span class="v big">${pct(dm.know)}%</span><div class="track"><i style="width:${pct(dm.know)}%"></i></div><span class="muted small">문제를 푼 개념만 반영 · 확인한 개념 ${dm.asked}/${dm.all} · 누르면 회차별</span></div></summary>${rows}<a class="go" href="#/quiz">오늘의 문제 ›</a></details>`;
   }
 
   // ---- 설정(⚙): 화면 보기(누구나) · 관리자 모드(관리자 비밀번호)
@@ -420,9 +420,14 @@
   // ------------------------------------------------------------ 홈
   function home() {
     const LV = D.levels || {B: "초급", I: "중급", A: "고급", E: "전문"};
-    const parts = [];
-    for (const t of D.topics) { let p = parts.find(x => x.name === t.part); if (!p) parts.push(p = {name: t.part, items: []}); p.items.push(t); }
-    const toc = parts.map((p, i) => {
+    // 과목 → 부 → 회차(2026-11-10) · 과목이 하나면 머리만 보이고 바로 펼침 · 둘 이상이면 과목 카드를 눌러 펼침
+    const subs = [];
+    for (const t of D.topics) {
+      const sn = t.subj || "대드론 총론";
+      let s = subs.find(x => x.name === sn); if (!s) subs.push(s = {name: sn, desc: t.subj_desc || "", parts: []});
+      let p = s.parts.find(x => x.name === t.part); if (!p) s.parts.push(p = {name: t.part, items: []}); p.items.push(t);
+    }
+    const partsToc = parts => parts.map((p, i) => {
       const open = p.items.some(t => t.has_note || t.status) || i === 0 ? " open" : "";
       const nm = p.name.replace(/^(\d)\s*/, "$1부 ");
       return `<details class="part"${open}><summary>${escH(nm)}</summary>${p.items.map(t => {
@@ -437,6 +442,13 @@
         return `<details class="topic${t.has_note ? "" : " wait"}"><summary><span class="rk rk-${t.has_note ? t.lvl : "off"}">${escH(t.code)}</span><span class="tt"><span class="tx">${escH(short)}</span></span></summary>${body}</details>`;
       }).join("")}</details>`;
     }).join("");
+    const subHead = s => {
+      const all = s.parts.flatMap(p => p.items), done = all.filter(t => t.has_note).length;
+      return `<span class="sj-n">과목</span><span class="sj-t">${escH(s.name)}</span><span class="sj-c">${done} / ${all.length}회차</span>`;
+    };
+    const toc = subs.length === 1
+      ? `<div class="subj one"><div class="sj-h">${subHead(subs[0])}</div>${subs[0].desc ? `<p class="sj-d">${escH(subs[0].desc)}</p>` : ""}${partsToc(subs[0].parts)}</div>`
+      : subs.map((s, i) => `<details class="subj"${i === 0 ? " open" : ""}><summary class="sj-h">${subHead(s)}</summary>${s.desc ? `<p class="sj-d">${escH(s.desc)}</p>` : ""}${partsToc(s.parts)}</details>`).join("");
 
     app.innerHTML = bar() + `<div class="wrap">${updTop()}
       <div class="hello">한 회차씩,<br>대드론 체계를 쌓아갑니다.</div>
