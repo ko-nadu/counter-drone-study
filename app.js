@@ -496,8 +496,10 @@
     } else window.scrollTo(0, 0);
   }
   // ---- 회차 음성 듣기(대표님 26.10.04 · 26.11.11부터 직원도) — 직원 키로 암호화된 음성을 받아 이 기기 보관함(cd-audio)에 두고, 풀어서 재생
-  // 재생기는 하나(AUD)라 다른 화면으로 옮겨도 계속 들림 · 들은 위치·속도 기억 · 잠금 화면·블루투스 조작(Media Session)
+  // 재생기는 하나(AUD) · 들은 위치·속도 기억 · 잠금 화면·블루투스 조작(Media Session) · 화면을 꺼도 이어짐
+  // 듣던 회차 화면을 떠나거나(돌아가기·다른 화면) 앱을 닫으면 멈추고 위치를 기억한다(대표님 26.11.11)
   const AUD = {el: new Audio(), tid: "", url: "", f: ""};
+  const audStop = () => { if (!AUD.tid || AUD.el.paused) return; AUD.el.pause(); ls.set("cd_aud_pos_" + AUD.tid, String(Math.floor(AUD.el.currentTime))); };
   const fmtT = s => { s = Math.max(0, Math.floor(s || 0)); return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`; };
   async function audLoad(tid, au) {
     let buf;
@@ -565,6 +567,7 @@
 
   function route() {
     const h = location.hash.replace(/^#\/?/, "").split("/");
+    if (AUD.tid && !(h[0] === "p" && h[1] && decodeURIComponent(h[1]) === AUD.tid)) audStop();   // 듣던 회차 화면을 떠남 → 멈춤
     if (h[0] === "p" && h[1]) page(decodeURIComponent(h[1]), h[2] && decodeURIComponent(h[2]));
     else if (h[0] === "archive") { if (on3("archive")) archive(); else location.hash = "#/"; }
     else if (h[0] === "settings") settings();
@@ -575,6 +578,7 @@
   function start() {
     buildIndex();
     window.addEventListener("hashchange", route);
+    window.addEventListener("pagehide", audStop);   // 앱을 닫음 → 멈춤
     route();
     const top = $("#top");
     window.addEventListener("scroll", () => { top.hidden = window.scrollY < 500; }, {passive: true});
