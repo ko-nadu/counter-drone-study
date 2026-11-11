@@ -481,7 +481,7 @@
     const back = pg.archive ? "#/archive" : "#/";
     const on = pid === "glossary" ? "glossary" : pid === "history" ? "history" : pg.archive ? "archive" : "home";
     if (pg.archive && !A) { location.hash = "#/"; return; }
-    const au = A && tid && A.audio && A.audio[tid];
+    const au = tid && D.audio && D.audio[tid];   // 직원 묶음(26.11.11 대표님 — 직원도 듣기)
     const audH = au ? `<div class="card aud"><div><b>🎧 듣기</b> <span class="muted small">두 진행자 대화 · 약 ${Math.round(au.dur / 60)}분 · 화면을 꺼도 이어집니다</span></div>
       <button type="button" class="big-btn" id="aplay">${AUD.tid === tid && !AUD.el.paused ? "❚❚ 일시정지" : "▶ 듣기"}</button>
       <div class="aud-r"><button type="button" class="ghost" data-ask="-10">« 10초</button><input type="range" id="aseek" min="0" max="${au.dur}" value="0" aria-label="재생 위치"><button type="button" class="ghost" data-ask="10">10초 »</button></div>
@@ -495,7 +495,7 @@
       if (el) { const box = el.closest("section.cs,tr") || el; box.scrollIntoView({block: "start"}); window.scrollBy(0, -64); box.classList.add("flash"); }
     } else window.scrollTo(0, 0);
   }
-  // ---- 회차 음성 듣기(대표님 26.10.04 · 대표님만) — 관리자 키로 암호화된 음성을 받아 이 기기 보관함(cd-audio)에 두고, 풀어서 재생
+  // ---- 회차 음성 듣기(대표님 26.10.04 · 26.11.11부터 직원도) — 직원 키로 암호화된 음성을 받아 이 기기 보관함(cd-audio)에 두고, 풀어서 재생
   // 재생기는 하나(AUD)라 다른 화면으로 옮겨도 계속 들림 · 들은 위치·속도 기억 · 잠금 화면·블루투스 조작(Media Session)
   const AUD = {el: new Audio(), tid: "", url: "", f: ""};
   const fmtT = s => { s = Math.max(0, Math.floor(s || 0)); return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`; };
@@ -510,8 +510,15 @@
       }
       buf = new Uint8Array(await r.arrayBuffer());
     } catch (e) { const r = await fetch(au.f, {cache: "no-store"}); if (!r.ok) throw new Error("HTTP " + r.status); buf = new Uint8Array(await r.arrayBuffer()); }
-    const k = await crypto.subtle.importKey("raw", akeyRaw(), "AES-GCM", false, ["decrypt"]);
-    const pt = await crypto.subtle.decrypt({name: "AES-GCM", iv: buf.slice(0, 12)}, k, buf.slice(12));
+    const k = await crypto.subtle.importKey("raw", RAW, "AES-GCM", false, ["decrypt"]);   // 직원 열쇠(26.11.11)
+    let pt;
+    try { pt = await crypto.subtle.decrypt({name: "AES-GCM", iv: buf.slice(0, 12)}, k, buf.slice(12)); }
+    catch (e) {   // 받아 둔 파일이 다른 열쇠로 잠긴 옛 판이면 지우고 한 번 새로 받는다
+      try { const c = await caches.open("cd-audio"); await c.delete(au.f); } catch (e2) {}
+      const r = await fetch(au.f, {cache: "reload"}); if (!r.ok) throw new Error("HTTP " + r.status); buf = new Uint8Array(await r.arrayBuffer());
+      pt = await crypto.subtle.decrypt({name: "AES-GCM", iv: buf.slice(0, 12)}, k, buf.slice(12));
+      try { const c = await caches.open("cd-audio"); await c.put(au.f, new Response(buf)); } catch (e2) {}   // 다시 받은 새 판을 보관(다음엔 인터넷 없이)
+    }
     return URL.createObjectURL(new Blob([pt], {type: "audio/mpeg"}));
   }
   function audBind(tid, title, au) {
