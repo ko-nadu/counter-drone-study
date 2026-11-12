@@ -305,6 +305,12 @@ details.subj>summary::-webkit-details-marker{display:none}
 .sj-t{font-size:18px;font-weight:800;color:var(--text);flex:1;min-width:0}
 .sj-c{font-size:13px;font-weight:700;color:var(--muted);white-space:nowrap}
 .sj-d{margin:8px 4px 10px;font-size:14px;line-height:1.55;color:var(--muted)}
+/* 홈 = 과목 단추 → 부 → 회차(2026-11-12 대표님 · 처음엔 모두 접힘) */
+.home-toc{margin-top:6px}
+details.subj>summary.sj-h{min-height:56px;align-items:center}
+details.subj>summary.sj-h::after{content:"＋";margin-left:4px;color:var(--muted);font-weight:500}
+details.subj[open]>summary.sj-h::after{content:"−"}
+details.subj[open]>summary.sj-h{margin-bottom:10px}
 /* AI 생성 장면 배지(운영플랜 6-2) */
 figure.fig.ai{position:relative}
 .aibadge{position:absolute;top:20px;left:20px;z-index:1;font-size:12px;font-weight:800;color:#fff;background:rgba(20,28,40,.78);padding:3px 8px;border-radius:8px}

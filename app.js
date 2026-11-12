@@ -172,10 +172,10 @@
     return {topics, know: kt.length ? kt.reduce((a, t) => a + t.know, 0) / kt.length : 0, asked, all, prov: topics.some(t => t.prov)};
   }
   const pct = x => Math.round((x || 0) * 100);
-  function rateCard() {  // 홈 상단 — 지식 수준(큰 숫자) · 진도(작게) → 누르면 회차별
+  function rateCard() {  // 문제 화면 머리(2026-11-12 대표님 "홈에서 지식수준 같은 것은 없애는게 좋겠어" → 「문제 화면으로 옮김」) — 지식 수준(큰 숫자) · 누르면 회차별
     const dm = devMastery();
     const rows = dm.topics.map(t => `<div class="rrow"><span class="t">${escH(t.id.replace(/^(\d)-/, "$1부 "))} ${escH(t.title.split(" — ")[0])}</span><span class="v">${t.know == null ? "—" : pct(t.know) + "%"}</span><div class="track"><i style="width:${pct(t.know)}%"></i></div><span class="muted small">${t.lv != null ? "수준 L" + t.lv + " · " : ""}확인 ${t.asked}/${t.items.length} 개념</span></div>`).join("");
-    return `<details class="card rate"><summary><div class="rrow top"><span class="t">지식 수준 <span class="muted small">(선택 복습 기준)</span></span><span class="v big">${pct(dm.know)}%</span><div class="track"><i style="width:${pct(dm.know)}%"></i></div><span class="muted small">문제를 푼 개념만 반영 · 확인한 개념 ${dm.asked}/${dm.all} · 누르면 회차별</span></div></summary>${rows}<a class="go" href="#/quiz">오늘의 문제 ›</a></details>`;
+    return `<details class="card rate"><summary><div class="rrow top"><span class="t">지식 수준 <span class="muted small">(선택 복습 기준)</span></span><span class="v big">${pct(dm.know)}%</span><div class="track"><i style="width:${pct(dm.know)}%"></i></div><span class="muted small">문제를 푼 개념만 반영 · 확인한 개념 ${dm.asked}/${dm.all} · 누르면 회차별</span></div></summary>${rows}</details>`;
   }
 
   // ---- 설정(⚙): 화면 보기(누구나) · 관리자 모드(관리자 비밀번호)
@@ -284,7 +284,7 @@
     } else body = `<button type="button" class="big-btn" id="qnew">${kind === "today" ? "오늘의 문제 시작" : "3문제 시작"}</button>`;
     const dm = devMastery(), P = pending(), wait = new Set(P.filter(r => r.sent).map(r => r.sent)).size, unsent = P.filter(r => !r.sent).length;
     app.innerHTML = bar("문제 풀이", "#/") + `<div class="wrap">
-      <div class="muted small" style="margin:2px 2px 8px">지식 수준 ${pct(dm.know)}% · 확인한 개념 ${dm.asked}/${dm.all}(배운 회차 개념 중 한 번이라도 물어본 것)</div>
+      ${rateCard()}
       <div class="card sendbox"><div><b>학습 세션에 보내지 않은 답 ${unsent}개</b> · 채점 기다리는 제출 ${wait}건</div>${lastSend()}${unsent ? `<button type="button" class="big-btn" id="qsend2">지금 학습 세션에 보내기</button>` : ""}<a class="askq" href="#/ask">질문함 · 학습 세션에 질문하기 ›</a></div>
       <div class="seg">${[["today", "오늘의 문제"], ["free", "자유 연습"]].map(([k, l]) => `<button type="button" class="segb${kind === k ? " on" : ""}" data-qkind="${k}">${l}</button>`).join("")}</div>
       ${kind === "free" ? `<div class="seg wrapseg">${chips}</div>` : ""}
@@ -427,10 +427,10 @@
       let s = subs.find(x => x.name === sn); if (!s) subs.push(s = {name: sn, desc: t.subj_desc || "", parts: []});
       let p = s.parts.find(x => x.name === t.part); if (!p) s.parts.push(p = {name: t.part, items: []}); p.items.push(t);
     }
-    const partsToc = parts => parts.map((p, i) => {
-      const open = p.items.some(t => t.has_note || t.status) || i === 0 ? " open" : "";
+    // 2026-11-12 대표님 "홈화면에서는 간단하게 … 과목 단추만 우선 나오고 이 단추를 누르면 아래 각 부가 펼쳐지고, 이 부를 누르면 해당 부의 하위 과정들이 펼쳐지게" → 과목·부 모두 처음엔 접힘
+    const partsToc = parts => parts.map(p => {
       const nm = p.name.replace(/^(\d)\s*/, "$1부 ");
-      return `<details class="part"${open}><summary>${escH(nm)}</summary>${p.items.map(t => {
+      return `<details class="part"><summary>${escH(nm)}</summary>${p.items.map(t => {
         // 목차 줄 = 배지 + 짧은 제목만(폰에서 한두 줄) · ' — ' 뒤 설명과 끝 괄호는 펼친 칸의 '다루는 범위'로
         const [head, ...rest] = t.title.split(" — ");
         const short = head.replace(/\s*\([^)]*\)\s*$/, "") || head;
@@ -446,19 +446,20 @@
       const all = s.parts.flatMap(p => p.items), done = all.filter(t => t.has_note).length;
       return `<span class="sj-n">과목</span><span class="sj-t">${escH(s.name)}</span><span class="sj-c">${done} / ${all.length}회차</span>`;
     };
-    const toc = subs.length === 1
-      ? `<div class="subj one"><div class="sj-h">${subHead(subs[0])}</div>${subs[0].desc ? `<p class="sj-d">${escH(subs[0].desc)}</p>` : ""}${partsToc(subs[0].parts)}</div>`
-      : subs.map((s, i) => `<details class="subj"${i === 0 ? " open" : ""}><summary class="sj-h">${subHead(s)}</summary>${s.desc ? `<p class="sj-d">${escH(s.desc)}</p>` : ""}${partsToc(s.parts)}</details>`).join("");
+    const toc = subs.map(s => `<details class="subj"><summary class="sj-h">${subHead(s)}</summary>${s.desc ? `<p class="sj-d">${escH(s.desc)}</p>` : ""}${partsToc(s.parts)}</details>`).join("");
 
+    // 홈 = 검색창 + 과목 단추만(인사말·지식 수준·용어 개수 줄·「전체 목차」 제목은 뺌 — 대표님 2026-11-12 · 검색창은 「남김」)
     app.innerHTML = bar() + `<div class="wrap">${updTop()}
-      <div class="hello">한 회차씩,<br>대드론 체계를 쌓아갑니다.</div>
-      ${on3("quiz") ? rateCard() : ""}
       <div class="search"><input id="q" type="search" placeholder="용어·주제·회차 검색 (예: C-UAS)" aria-label="검색" enterkeyhint="search"><button class="x" id="qx" aria-label="지우기" hidden>×</button></div>
-      <div id="res"></div><div id="main">
-      <div class="muted small meta-line">용어 ${D.stats.terms}개 · 논문 포인트 ${D.stats.points}개 · 정리 ${escH(D.built)}</div>
-
-      <h2 class="h-sec">전체 목차</h2>${toc}
-      </div></div>` + nav("home");
+      <div id="res"></div><div id="main" class="home-toc">${toc}</div></div>` + nav("home");
+    // 펼친 과목·부를 기억(노트를 보고 돌아와도 같은 자리) — 이 기기 안
+    const KEY = "cd-open";
+    let opened = []; try { opened = JSON.parse(sessionStorage.getItem(KEY) || "[]"); } catch (e) {}
+    const dets = [...document.querySelectorAll("#main details.subj, #main details.part")];
+    dets.forEach((d, i) => { if (opened.includes(i)) d.open = true; d.addEventListener("toggle", () => {
+      const now = dets.map((x, j) => x.open ? j : -1).filter(j => j >= 0);
+      try { sessionStorage.setItem(KEY, JSON.stringify(now)); } catch (e) {}
+    }); });
     const q = $("#q"), qx = $("#qx");
     const run = () => {
       const v = q.value.trim(); qx.hidden = !v; $("#main").hidden = !!v;
