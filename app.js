@@ -450,8 +450,11 @@
 
     // 홈 = 검색창 + 과목 단추만(인사말·지식 수준·용어 개수 줄·「전체 목차」 제목은 뺌 — 대표님 2026-11-12 · 검색창은 「남김」)
     app.innerHTML = bar() + `<div class="wrap">${updTop()}
-      <div class="search"><input id="q" type="search" placeholder="용어·주제·회차 검색 (예: C-UAS)" aria-label="검색" enterkeyhint="search"><button class="x" id="qx" aria-label="지우기" hidden>×</button></div>
+      <div class="search stick"><input id="q" type="search" placeholder="용어·주제·회차 검색 (예: C-UAS)" aria-label="검색" enterkeyhint="search"><button class="x" id="qx" aria-label="지우기" hidden>×</button></div>
       <div id="res"></div><div id="main" class="home-toc">${toc}</div></div>` + nav("home");
+    // 2026-11-13 대표님 "홈에서는 검색할 수 있는 것이 항상 상단에" → 검색창을 상단 막대 바로 밑에 고정(막대 높이는 기기마다 달라 실측)
+    const setTop = () => { const h = document.querySelector(".top"); if (h) document.documentElement.style.setProperty("--toph", h.offsetHeight + "px"); };
+    setTop(); window.addEventListener("resize", setTop, {once: true});
     // 펼친 과목·부를 기억(노트를 보고 돌아와도 같은 자리) — 이 기기 안
     const KEY = "cd-open";
     let opened = []; try { opened = JSON.parse(sessionStorage.getItem(KEY) || "[]"); } catch (e) {}
@@ -476,18 +479,17 @@
   function page(pid, sid) {
     const pg = D.pages[pid];
     if (!pg) { location.hash = "#/"; return; }
-    const chips = pg.secs.filter(s => s.level === 2).map(s => `<a href="#/p/${pid}/${s.id}">${escH(s.title.replace(/\s*\(.*$/, ""))}</a>`).join("");
+    // 2026-11-13 대표님 "실제 학습에 필요한 내용들 외에는 없앴으면" → 절 바로가기 단추 · 듣기 카드 머리 줄 · 본문 첫 큰 제목(상단 막대와 겹침) 뺌
     const tid = /^\d-(?:[BIAE]\d\d|CHK)$/.test(pid) ? pid : null;
     const rec = tid && D.pages["rec-" + tid] ? `<a class="recnote" href="#/p/rec-${tid}">이 회차를 공부한 과정(문답·첨삭·교재 재료·논문 포인트)은 <b>보관함 › 학습 기록</b>에 있습니다 ›</a>` : "";
     const back = pg.archive ? "#/archive" : "#/";
     const on = pid === "glossary" ? "glossary" : pid === "history" ? "history" : pg.archive ? "archive" : "home";
     if (pg.archive && !A) { location.hash = "#/"; return; }
     const au = tid && D.audio && D.audio[tid];   // 직원 묶음(26.11.11 대표님 — 직원도 듣기)
-    const audH = au ? `<div class="card aud"><div><b>🎧 듣기</b> <span class="muted small">두 진행자 대화 · 약 ${Math.round(au.dur / 60)}분 · 화면을 꺼도 이어집니다</span></div>
-      <button type="button" class="big-btn" id="aplay">${AUD.tid === tid && !AUD.el.paused ? "❚❚ 일시정지" : "▶ 듣기"}</button>
+    const audH = au ? `<div class="card aud"><button type="button" class="big-btn" id="aplay">${AUD.tid === tid && !AUD.el.paused ? "❚❚ 일시정지" : "▶ 듣기"}</button>
       <div class="aud-r"><button type="button" class="ghost" data-ask="-10">« 10초</button><input type="range" id="aseek" min="0" max="${au.dur}" value="0" aria-label="재생 위치"><button type="button" class="ghost" data-ask="10">10초 »</button></div>
       <div class="aud-r"><span class="muted small" id="atime">0:00 / ${fmtT(au.dur)}</span><select id="arate" aria-label="속도">${[0.8, 1, 1.25, 1.5].map(r => `<option value="${r}"${(+ls.get("cd_aud_rate", "1")) === r ? " selected" : ""}>${r}배</option>`).join("")}</select></div></div>` : "";
-    app.innerHTML = bar(pg.title, back) + `<div class="wrap">${chips && pid !== "glossary" ? `<div class="chips">${chips}</div>` : ""}${audH}<article class="doc">${pg.html}</article>${rec}${A && tid ? `<a class="askq" href="#/ask/${tid}">이 노트에 대해 학습 세션에 질문하기 ›</a>` : ""}
+    app.innerHTML = bar(pg.title, back) + `<div class="wrap">${audH}<article class="doc">${pg.html.replace(/^(\s*(?:<section[^>]*>)?\s*)<h1[^>]*>[\s\S]*?<\/h1>/, "$1")}</article>${rec}${A && tid ? `<a class="askq" href="#/ask/${tid}">이 노트에 대해 학습 세션에 질문하기 ›</a>` : ""}
       ${pid === "about" ? `<div class="foot"><button id="lo">이 기기에서 잠그기</button></div>` : ""}</div>` + nav(on);
     if (pid === "about") $("#lo").onclick = () => { store.del(); location.hash = "#/"; location.reload(); };
     if (au) audBind(tid, pg.title, au);
