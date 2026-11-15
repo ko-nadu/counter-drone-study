@@ -381,7 +381,7 @@
         <div class="askq-t">${escH(x.text)}</div>${ans ? `<div class="ex"><b>학습 세션의 답</b><div class="concept">${escH(ans.a)}</div><div class="muted small">근거 · ${escH(ans.src)}${ans.d ? " · " + escH(ans.d) : ""}</div></div>` : (x.sent ? `<div class="muted small">답을 준비 중입니다 — 학습 세션이 원문을 확인한 뒤 올립니다</div>` : "")}</div>`;
     }).join("");
     const unsent = L.filter(x => !x.sent).length;
-    app.innerHTML = bar("질문하기", ref && /^\d-[BIAE]\d\d$/.test(ref) ? "#/p/" + ref : "#/quiz") + `<div class="wrap">
+    app.innerHTML = bar("질문하기", ref && /^(?:[A-Z]{2})?\d-[BIAE]\d\d$/.test(ref) ? "#/p/" + ref : "#/quiz") + `<div class="wrap">
       ${c.label ? `<div class="card"><div class="muted small">어디서 묻나</div><b>${escH(c.label)}</b>${c.text ? `<div class="muted small" style="margin-top:4px">${escH(c.text)}</div>` : ""}</div>` : ""}
       <div class="card"><textarea id="askt" rows="5" placeholder="궁금한 점을 자유롭게 적어 주세요 — 어느 문제·노트에서 물었는지는 함께 보냅니다"></textarea>
         <button type="button" class="big-btn" id="askgo">질문 보내기</button>
@@ -480,7 +480,7 @@
     const pg = D.pages[pid];
     if (!pg) { location.hash = "#/"; return; }
     // 2026-11-13 대표님 "실제 학습에 필요한 내용들 외에는 없앴으면" → 절 바로가기 단추 · 듣기 카드 머리 줄 · 본문 첫 큰 제목(상단 막대와 겹침) 뺌
-    const tid = /^\d-(?:[BIAE]\d\d|CHK)$/.test(pid) ? pid : null;
+    const tid = /^(?:[A-Z]{2})?\d-(?:[BIAE]\d\d|CHK)$/.test(pid) ? pid : null;
     const rec = tid && D.pages["rec-" + tid] ? `<a class="recnote" href="#/p/rec-${tid}">이 회차를 공부한 과정(문답·첨삭·교재 재료·논문 포인트)은 <b>보관함 › 학습 기록</b>에 있습니다 ›</a>` : "";
     const back = pg.archive ? "#/archive" : "#/";
     const on = pid === "glossary" ? "glossary" : pid === "history" ? "history" : pg.archive ? "archive" : "home";
