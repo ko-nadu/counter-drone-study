@@ -317,3 +317,23 @@ details.subj[open]>summary.sj-h{margin-bottom:10px}
 /* AI 생성 장면 배지(운영플랜 6-2) */
 figure.fig.ai{position:relative}
 .aibadge{position:absolute;top:20px;left:20px;z-index:1;font-size:12px;font-weight:800;color:#fff;background:rgba(20,28,40,.78);padding:3px 8px;border-radius:8px}
+/* 2026-11-17 듣기 끝 = 다시 듣기 · 다음 / 문제 범위 고르기(과목 → 부 → 회차) */
+.aend{display:flex;gap:8px;align-items:center}.aend[hidden]{display:none}
+.aend .big-btn{flex:1;margin:10px 0 6px}
+.big-btn.ghostb{background:var(--card);color:var(--accent);border:1.5px solid var(--accent)}
+.aend-x{flex:1;text-align:center;color:var(--muted);font-weight:700}
+.qrng{padding:0;overflow:hidden}
+.qrng>summary{list-style:none;cursor:pointer;display:flex;align-items:center;gap:10px;min-height:52px;padding:10px 14px}
+.qrng>summary::-webkit-details-marker{display:none}
+.qrng>summary b{flex:1;min-width:0;line-height:1.45}
+.qrng>summary::after{content:"＋";color:var(--muted);font-weight:500}
+.qrng[open]>summary::after{content:"−"}
+.qrng[open]>summary{border-bottom:1px solid var(--line)}
+.qrng .subj{margin:10px 10px 0}
+.qrng .subj:last-child{margin-bottom:10px}
+.qrng details.part{margin:0 0 8px}
+.qpk{display:flex;gap:10px;align-items:center;width:100%;min-height:48px;padding:10px 14px;border:0;border-top:1px solid var(--line);background:none;color:var(--text);font:inherit;text-align:left;cursor:pointer}
+.qpk .tx{flex:1;min-width:0;line-height:1.5}
+.qpk.on{background:var(--accent-soft);color:var(--accent);font-weight:800}
+.qpk.qall{font-weight:700;border:1px solid var(--line);border-radius:12px;margin:10px 0 8px;width:100%}
+.qrng>.qpk.qall{margin:10px;width:calc(100% - 20px)}

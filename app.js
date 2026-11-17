@@ -220,15 +220,27 @@
     window.scrollTo(0, 0);
   }
 
-  // ---- 문제 풀이(채점 v2): ① 오늘의 문제(학습 세션이 고름 · '왜' 한 줄) ② 자유 연습(회차 선택 · 약한 개념 우선 3문제)
+  // ---- 문제 풀이(채점 v2): 범위 고르기(모든 과목 · 과목 전체 · 회차) → 약한 개념 우선 3문제
+  // (2026-11-17 대표님 "오늘의 문제로 하지 말고" → 「오늘의 문제」 칸 없앰 · 학습 세션의 today 목록은 앱에서 안 씀)
   // 서술형 = 상황형이 있으면 상황형 · 자기 평가는 학습 세션과 같은 축(사실 0-2 · 근거 0-1 · 이유 0-1 · 단정 오답 -1 · 모름 -1) → 가채점
   // 객관식 = 사실 축만(정답 2 · 오답 0 · 모름 -1) · 다 풀면 '학습 세션에 보내기'(비공개 제출함 · 관리자 키로 암호화)
   let QZ = null;
   // 문항의 시각(대표님 26.10.04 "다양한 시각에서의 접근") — 배지 이름
   const VLAB = {"개념": "개념", "상황": "상황", "역할": "역할 바꾸기", "반론": "반론", "오류": "틀린 곳 찾기", "우선순위": "우선순위", "비교": "비교", "연결": "연결", "연구": "연구 질문"};
   const ITEMS = () => { const m = {}; for (const t of A.bank) for (const i of t.items) m[i.id] = Object.assign({}, i, {ttl: t.title}); return m; };
+  // 범위(2026-11-17 대표님 "범위를 각 단원별로도 하고, 전체에서도" · 단원 = 부 안의 각 회차) = "all" 모든 과목 · "S:<과목>" 과목 전체 · 회차 id
+  const TOP = () => { const m = {}; for (const t of D.topics) m[t.id] = t; return m; };
+  const subjOf = id => (TOP()[id] || {}).subj || "대드론 총론";
+  const inSel = (sel, id) => sel === "all" || sel === id || (sel.startsWith("S:") && subjOf(id) === sel.slice(2));
+  const shortT = t => { const head = t.title.split(" — ")[0]; return head.replace(/\s*\([^)]*\)\s*$/, "") || head; };
+  function selLabel(sel) {
+    if (sel === "all") return "모든 과목 전체";
+    if (sel.startsWith("S:")) return sel.slice(2) + " 전체";
+    const t = TOP()[sel]; if (!t) return "모든 과목 전체";
+    return `${t.subj || "대드론 총론"} › ${t.part.replace(/^(\d)\s*/, "$1부 ")} › ${shortT(t)}`;
+  }
   function pick3(sel) {
-    const pool = []; for (const t of devMastery().topics) if (sel === "all" || sel === t.id) pool.push(...t.items);
+    const pool = []; for (const t of devMastery().topics) if (inSel(sel, t.id)) pool.push(...t.items);
     const w = x => (1 - x.m) * 2 + (x.n ? 0 : 0.5) + 0.2, out = [];
     while (out.length < 3 && pool.length) {
       let r = Math.random() * pool.reduce((a, x) => a + w(x), 0), k = 0;
@@ -238,7 +250,6 @@
     }
     return out;
   }
-  const todaySet = () => { const M = ITEMS(); return (A.today || []).filter(x => M[x.q]).map(x => ({it: M[x.q], why: x.why, vt: x.vt || "", vq: x.vq || ""})); };
   // 풀던 문제 보관(이 기기 안 · 새 판 반영·앱 재시작에도 이어서) — 대표님 26.10.04 "풀고 있던 문제가 그냥 사라졌어"
   const QDRAFT = "cd_quiz_draft";
   function saveDraft() {
@@ -249,11 +260,13 @@
     try {
       const d = JSON.parse(ls.get(QDRAFT, "null")); if (!d || Date.now() - d.at > 3 * 864e5) return null;
       const M = ITEMS(), qs = d.qs.filter(x => M[x.q]).map(x => ({it: M[x.q], why: x.why, vt: x.vt || "", vq: x.vq || ""}));
+      if (d.kind === "today" || !d.sel || (d.sel !== "all" && !d.sel.startsWith("S:") && !TOP()[d.sel])) d.sel = "all";   // 옛 「오늘의 문제」 보관분 → 모든 과목 전체로 이어서
+      delete d.kind;
       return qs.length ? Object.assign(d, {qs}) : null;
     } catch (e) { return null; }
   }
   const busy = () => /^#\/quiz/.test(location.hash) && QZ && QZ.qs && QZ.qs.length && !(QZ.sub && !pending().some(r => !r.sent));
-  const newSet = (kind, sel, mode) => ({kind, sel, mode, qs: kind === "today" ? todaySet() : pick3(sel), res: [], pick: [], text: [], ev: [], sub: false});
+  const newSet = (sel, mode) => ({sel, mode, qs: pick3(sel), res: [], pick: [], text: [], ev: [], sub: false});
   function record(it, mode, o) {
     const uid = Date.now() + "-" + Math.random().toString(36).slice(2, 6);
     const L = qlog(); L.push(Object.assign({v: 2, uid, q: it.id, m: mode, t: Date.now(), sent: ""}, o)); saveLog(L); return uid;
@@ -263,8 +276,22 @@
   function quiz() {
     if (!on3("quiz")) { location.hash = "#/"; return; }
     if (!QZ) { const d = loadDraft(); if (d) { QZ = d; setTimeout(() => toast("풀던 문제를 이어서 보여 드립니다"), 50); } }
-    const sel = (QZ && QZ.sel) || "all", mode = (QZ && QZ.mode) || "sa", kind = (QZ && QZ.kind) || "today";
-    const chips = [["all", "전체"], ...A.bank.map(t => [t.id, t.id.replace(/^(\d)-/, "$1부 ")])].map(([k, l]) => `<button type="button" class="segb${sel === k ? " on" : ""}" data-qsel="${k}">${escH(l)}</button>`).join("");
+    const sel = (QZ && QZ.sel) || "all", mode = (QZ && QZ.mode) || "sa";
+    // 범위 고르기 = 학습 메뉴(홈)와 같은 과목 → 부 → 회차(2026-11-17 대표님 "문제메뉴에는 학습과 똑 같이 과목별로") · 문항이 있는 회차만
+    const hasQ = new Set(A.bank.filter(t => t.items.length).map(t => t.id)), subs = [];
+    for (const t of D.topics) {
+      if (!hasQ.has(t.id)) continue;
+      const sn = t.subj || "대드론 총론";
+      let s = subs.find(x => x.name === sn); if (!s) subs.push(s = {name: sn, parts: []});
+      let p = s.parts.find(x => x.name === t.part); if (!p) s.parts.push(p = {name: t.part, items: []}); p.items.push(t);
+    }
+    const qb = (k, inner, cls) => `<button type="button" class="qpk${cls ? " " + cls : ""}${sel === k ? " on" : ""}" data-qsel="${escH(k)}">${inner}</button>`;
+    const chips = `<details class="qrng card"><summary><span class="muted small">범위</span><b>${escH(selLabel(sel))}</b></summary>
+      ${qb("all", "모든 과목 전체", "qall")}
+      ${subs.map(s => `<details class="subj"${sel === "S:" + s.name || subjOf(sel) === s.name && TOP()[sel] ? " open" : ""}><summary class="sj-h"><span class="sj-n">과목</span><span class="sj-t">${escH(s.name)}</span></summary>
+        ${qb("S:" + s.name, escH(s.name) + " 전체", "qall")}
+        ${s.parts.map(p => `<details class="part"${p.items.some(t => t.id === sel) ? " open" : ""}><summary>${escH(p.name.replace(/^(\d)\s*/, "$1부 "))}</summary>${p.items.map(t => qb(t.id, `<span class="rk rk-${t.lvl}">${escH(t.code)}</span><span class="tx">${escH(shortT(t))}</span>`)).join("")}</details>`).join("")}
+      </details>`).join("")}</details>`;
     const modes = [["sa", "서술"], ["mc", "객관식"]].map(([k, l]) => `<button type="button" class="segb${mode === k ? " on" : ""}" data-qmode="${k}">${l}</button>`).join("");
     let body = "";
     if (QZ && QZ.qs) {
@@ -278,23 +305,21 @@
         return `<div class="card qz">${whyH}<div class="qn">${n + 1}. ${escH(qtext)} <span class="lvb">${escH(VLAB[vlab] || vlab)}</span></div><textarea data-sa="${n}" rows="4" placeholder="노트를 보지 말고 기억나는 대로 써 보세요"${QZ.sub ? " disabled" : ""}>${escH(QZ.text[n] || "")}</textarea>${QZ.sub ? `<div class="ex"><b>개념 정리</b><div class="concept">${escH(it.a)}</div>${opH(it)}<div class="muted small">답은 저장됐습니다 · 채점은 학습 세션이 합니다 · ${escH(it.ttl)}</div></div>` : `<button type="button" class="ghost dk" data-dk="${n}">모름</button>`}<a class="askq" href="#/ask/${encodeURIComponent(it.id)}">이 문제에 대해 질문하기 ›</a></div>`;
       }).join("");
       const all = QZ.qs.length && (QZ.mode === "sa" ? QZ.sub : QZ.qs.every((_, n) => QZ.res[n]));
-      if (!QZ.qs.length) body = `<div class="card muted">오늘의 문제가 아직 없습니다. 자유 연습을 골라 주세요.</div>`;
-      else if (all) body += `<button type="button" class="big-btn" id="qsend">학습 세션에 보내기</button><button type="button" class="ghost" id="qnew">${QZ.kind === "today" ? "오늘의 문제 다시" : "다시 3문제"}</button>`;
+      if (!QZ.qs.length) body = `<div class="card muted">이 범위에는 아직 문제가 없습니다. 다른 범위를 골라 주세요.</div>`;
+      else if (all) body += `<button type="button" class="big-btn" id="qsend">학습 세션에 보내기</button><button type="button" class="ghost" id="qnew">다시 3문제</button>`;
       else if (!QZ.sub) body += `<button type="button" class="big-btn" id="qsub">답 확인하기 (아직 안 보냄)</button>`;
-    } else body = `<button type="button" class="big-btn" id="qnew">${kind === "today" ? "오늘의 문제 시작" : "3문제 시작"}</button>`;
+    } else body = `<button type="button" class="big-btn" id="qnew">3문제 시작</button>`;
     const dm = devMastery(), P = pending(), wait = new Set(P.filter(r => r.sent).map(r => r.sent)).size, unsent = P.filter(r => !r.sent).length;
     app.innerHTML = bar("문제 풀이", "#/") + `<div class="wrap">
       ${rateCard()}
       <div class="card sendbox"><div><b>학습 세션에 보내지 않은 답 ${unsent}개</b> · 채점 기다리는 제출 ${wait}건</div>${lastSend()}${unsent ? `<button type="button" class="big-btn" id="qsend2">지금 학습 세션에 보내기</button>` : ""}<a class="askq" href="#/ask">질문함 · 학습 세션에 질문하기 ›</a></div>
-      <div class="seg">${[["today", "오늘의 문제"], ["free", "자유 연습"]].map(([k, l]) => `<button type="button" class="segb${kind === k ? " on" : ""}" data-qkind="${k}">${l}</button>`).join("")}</div>
-      ${kind === "free" ? `<div class="seg wrapseg">${chips}</div>` : ""}
+      ${chips}
       <div class="seg">${modes}</div>${body}</div>` + nav("quiz");
     saveDraft();
-    const reset = o => { QZ = Object.assign({sel, mode, kind}, o); quiz(); };
-    document.querySelectorAll("[data-qkind]").forEach(b => b.onclick = () => reset({kind: b.dataset.qkind}));
-    document.querySelectorAll("[data-qsel]").forEach(b => b.onclick = () => reset({sel: b.dataset.qsel}));
+    const reset = o => { QZ = Object.assign({sel, mode}, o); quiz(); };
+    document.querySelectorAll("[data-qsel]").forEach(b => b.onclick = () => { const y = window.scrollY; reset({sel: b.dataset.qsel}); window.scrollTo(0, Math.min(y, (document.querySelector(".qrng") || {}).offsetTop || 0)); });   // 고르면 범위 목록이 접힘
     document.querySelectorAll("[data-qmode]").forEach(b => b.onclick = () => reset({mode: b.dataset.qmode}));
-    const nw = $("#qnew"); if (nw) nw.onclick = () => { QZ = newSet(kind, sel, mode); quiz(); window.scrollTo(0, 0); };
+    const nw = $("#qnew"); if (nw) nw.onclick = () => { QZ = newSet(sel, mode); quiz(); window.scrollTo(0, 0); };
     document.querySelectorAll("textarea[data-sa]").forEach(t => t.oninput = () => { QZ.text[+t.dataset.sa] = t.value; saveDraft(); });
     document.querySelectorAll(".qz input[type=radio]").forEach(r => r.onchange = () => { QZ.pick[+r.name.slice(1)] = +r.value; saveDraft(); });
     document.querySelectorAll("[data-dk]").forEach(b => b.onclick = () => { const n = +b.dataset.dk; QZ.text[n] = "(모름)"; QZ.ev[n] = {dk: 1}; const it = QZ.qs[n].it; QZ.res[n] = {s: -1, dk: 1}; record(it, "sa", {text: "(모름)", dk: 1, s: null, ask: QZ.qs[n].vq || it.sq || it.q, vt: QZ.qs[n].vt || ""}); quiz(); });
@@ -487,12 +512,13 @@
     if (pg.archive && !A) { location.hash = "#/"; return; }
     const au = tid && D.audio && D.audio[tid];   // 직원 묶음(26.11.11 대표님 — 직원도 듣기)
     const audH = au ? `<div class="card aud"><button type="button" class="big-btn" id="aplay">${AUD.tid === tid && !AUD.el.paused ? "❚❚ 일시정지" : "▶ 듣기"}</button>
+      <div class="aend" id="aend" hidden><button type="button" class="big-btn ghostb" id="aagain">↻ 다시 듣기</button>${audNext(tid) ? `<button type="button" class="big-btn" id="anext">다음 ›</button>` : `<span class="aend-x">과목 끝</span>`}</div>
       <div class="aud-r"><button type="button" class="ghost" data-ask="-10">« 10초</button><input type="range" id="aseek" min="0" max="${au.dur}" value="0" aria-label="재생 위치"><button type="button" class="ghost" data-ask="10">10초 »</button></div>
       <div class="aud-r"><span class="muted small" id="atime">0:00 / ${fmtT(au.dur)}</span><select id="arate" aria-label="속도">${[0.8, 1, 1.25, 1.5].map(r => `<option value="${r}"${(+ls.get("cd_aud_rate", "1")) === r ? " selected" : ""}>${r}배</option>`).join("")}</select></div></div>` : "";
     app.innerHTML = bar(pg.title, back) + `<div class="wrap">${audH}<article class="doc">${pg.html.replace(/^(\s*(?:<section[^>]*>)?\s*)<h1[^>]*>[\s\S]*?<\/h1>/, "$1")}</article>${rec}${A && tid ? `<a class="askq" href="#/ask/${tid}">이 노트에 대해 학습 세션에 질문하기 ›</a>` : ""}
       ${pid === "about" ? `<div class="foot"><button id="lo">이 기기에서 잠그기</button></div>` : ""}</div>` + nav(on);
     if (pid === "about") $("#lo").onclick = () => { store.del(); location.hash = "#/"; location.reload(); };
-    if (au) audBind(tid, pg.title, au);
+    if (au) { audBind(tid, pg.title, au); if (AUD.auto === tid) { AUD.auto = ""; $("#aplay").click(); } }   // 「다음 ›」으로 넘어온 편 = 바로 재생
     if (sid) {
       const el = document.getElementById(sid);
       if (el) { const box = el.closest("section.cs,tr") || el; box.scrollIntoView({block: "start"}); window.scrollBy(0, -64); box.classList.add("flash"); }
@@ -501,7 +527,14 @@
   // ---- 회차 음성 듣기(대표님 26.10.04 · 26.11.11부터 직원도) — 직원 키로 암호화된 음성을 받아 이 기기 보관함(cd-audio)에 두고, 풀어서 재생
   // 재생기는 하나(AUD) · 들은 위치·속도 기억 · 잠금 화면·블루투스 조작(Media Session) · 화면을 꺼도 이어짐
   // 듣던 회차 화면을 떠나거나(돌아가기·다른 화면) 앱을 닫으면 멈추고 위치를 기억한다(대표님 26.11.11)
-  const AUD = {el: new Audio(), tid: "", url: "", f: ""};
+  const AUD = {el: new Audio(), tid: "", url: "", f: "", auto: ""};
+  // 다 들은 뒤 「다음 ›」 = 같은 과목의 다음 편(정리 편 포함 · 학습 메뉴 순서 · 음성 있는 편만) · 과목 마지막이면 없음(2026-11-17 대표님 답 "그래")
+  function audNext(tid) {
+    const L = D.topics, i = L.findIndex(t => t.id === tid); if (i < 0) return "";
+    const sj = L[i].subj || "대드론 총론";
+    for (let k = i + 1; k < L.length; k++) { if ((L[k].subj || "대드론 총론") !== sj) return ""; if (D.audio && D.audio[L[k].id] && D.pages[L[k].id]) return L[k].id; }
+    return "";
+  }
   const audStop = () => { if (!AUD.tid || AUD.el.paused) return; AUD.el.pause(); ls.set("cd_aud_pos_" + AUD.tid, String(Math.floor(AUD.el.currentTime))); };
   const fmtT = s => { s = Math.max(0, Math.floor(s || 0)); return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`; };
   async function audLoad(tid, au) {
@@ -529,7 +562,13 @@
   function audBind(tid, title, au) {
     if (AUD.tid === tid && AUD.f !== au.f) { AUD.el.pause(); AUD.tid = ""; }   // 새 판 음성이 올라오면 받아 둔 옛 음성을 버리고 새로 받는다(26.11.11 · 앱을 끄지 않고 다시 열 때 옛 목소리가 남던 경로)
     const el = AUD.el, pb = $("#aplay"), sk = $("#aseek"), tm = $("#atime"), rt = $("#arate"), pk = "cd_aud_pos_" + tid;
-    const sync = () => { if (AUD.tid !== tid) return; sk.value = Math.floor(el.currentTime); tm.textContent = `${fmtT(el.currentTime)} / ${fmtT(au.dur)}`; pb.textContent = el.paused ? "▶ 이어 듣기" : "❚❚ 일시정지"; };
+    // 다 들은 뒤엔 「이어 듣기」 대신 「다시 듣기 · 다음」 두 단추(2026-11-17 대표님 — 이어 듣기를 누르면 같은 편이 반복되던 것)
+    const ae = $("#aend");
+    const sync = () => {
+      if (AUD.tid !== tid) return; sk.value = Math.floor(el.currentTime); tm.textContent = `${fmtT(el.currentTime)} / ${fmtT(au.dur)}`;
+      pb.textContent = !el.paused ? "❚❚ 일시정지" : el.currentTime < 1 ? "▶ 듣기" : "▶ 이어 듣기";
+      pb.hidden = el.ended; ae.hidden = !el.ended;
+    };
     if (AUD.tid !== tid) { const p = +ls.get(pk, "0"); sk.value = p; tm.textContent = `${fmtT(p)} / ${fmtT(au.dur)}`; if (p > 5) pb.textContent = "▶ 이어 듣기"; } else sync();
     el.ontimeupdate = () => { sync(); if (AUD.tid && Math.floor(el.currentTime) % 5 === 0) ls.set("cd_aud_pos_" + AUD.tid, String(Math.floor(el.currentTime))); };
     el.onplay = el.onpause = sync;
@@ -541,7 +580,7 @@
         catch (e) { pb.disabled = false; pb.textContent = "▶ 듣기"; toast("음성을 받지 못했습니다(" + e.message + ")"); return; }
         pb.disabled = false; AUD.tid = tid; AUD.f = au.f; el.src = AUD.url; el.currentTime = +ls.get(pk, "0");
       }
-      el.playbackRate = +rt.value; await el.play().catch(() => {});
+      el.playbackRate = +rt.value; await el.play().catch(() => {}); sync();   // 자동 재생이 막히면(일부 아이폰) 「▶ 듣기」로 돌아옴
       if ("mediaSession" in navigator) {
         navigator.mediaSession.metadata = new MediaMetadata({title, artist: "대드론 학습 노트", album: "두 진행자 대화"});
         navigator.mediaSession.setActionHandler("play", () => el.play());
@@ -551,6 +590,8 @@
       }
     };
     pb.onclick = () => { if (AUD.tid === tid && !el.paused) el.pause(); else start(); };
+    $("#aagain").onclick = () => { el.currentTime = 0; ls.set(pk, "0"); start(); };
+    const nx = $("#anext"); if (nx) nx.onclick = () => { const n = audNext(tid); if (!n) return; AUD.auto = n; location.hash = "#/p/" + n; };
     document.querySelectorAll("[data-ask]").forEach(b => b.onclick = () => { if (AUD.tid === tid) el.currentTime = Math.max(0, Math.min(el.duration || au.dur, el.currentTime + (+b.dataset.ask))); });
     sk.oninput = () => { if (AUD.tid === tid) el.currentTime = +sk.value; else ls.set(pk, sk.value); tm.textContent = `${fmtT(+sk.value)} / ${fmtT(au.dur)}`; };
     rt.onchange = () => { ls.set("cd_aud_rate", rt.value); el.playbackRate = +rt.value; };
